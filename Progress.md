@@ -72,7 +72,8 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 > **2026-11-17 改採 Cloudflare 前後端分離**（計畫：`Plans/6-前後端分離-實作.md`），下方原「同機反向代理」方案暫緩。
 >
 > - [x] 前端：Cloudflare Pages 專案 `gis-martin` → https://gis-martin.pages.dev（GitHub `main` push 自動部署；root `web`、`pnpm install --frozen-lockfile && pnpm build`、輸出 `dist`、`NODE_VERSION=22.18.0`、`PNPM_VERSION=10.32.1`）。`_headers` 已生效（assets immutable、index.html no-cache），worker `.mjs` 正常提供
-> - [ ] **尚未設 `VITE_MARTIN_URL`** → 網站目前顯示「設定錯誤」。待後端有 https 網址後到 Pages → 設定 → 環境變數補上並重新部署
+> - [x] **暫時以 quick tunnel 測試成功**（2026-11-17）：`cloudflared tunnel --url http://127.0.0.1:3000`（Claude Code 背景程序，關閉即斷）→ Pages `VITE_MARTIN_URL` 設為該 `*.trycloudflare.com` 網址並重新部署，地圖正常顯示。Martin CORS 已加 `https://gis-martin.pages.dev`
+>   - quick tunnel 每次重啟網址會變 → 需同步改 Pages 的 `VITE_MARTIN_URL` 並重新部署；無 edge 快取、無路徑白名單，僅供測試
 > - [ ] 後端：Cloudflare 帳號尚無網域 → 需先決定網域，才能建 named tunnel（計畫 §4）
 
 目前前端只在 `pnpm dev` 下運作，且 Vite 開發伺服器跑在 Claude Code 的背景程序，關閉即停止。
