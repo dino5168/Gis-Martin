@@ -12,6 +12,15 @@ export interface SelectedFeature {
   properties: Record<string, unknown>;
 }
 
+/** One-off camera request; compared by identity, so pass a new object each time. */
+export interface MapFocus {
+  bounds: [[number, number], [number, number]];
+}
+
+// 縮放到公車路線時不要太近：單一車輛時 bounds 是一個點
+const FOCUS_MAX_ZOOM = 15;
+const FOCUS_PADDING = 80;
+
 /** Current camera, reported for the status bar (EPSG:4326 lon/lat). */
 export interface ViewState {
   zoom: number;
@@ -24,6 +33,8 @@ interface MapViewProps {
   style: StyleSpecification;
   /** LOD1 3D building mode: tilts the camera (extrusion visibility is part of `style`). */
   threeD: boolean;
+  /** Area to zoom to (EPSG:4326 `[[w,s],[e,n]]`); a new object triggers one camera move. */
+  focus?: MapFocus | null;
   onSelect: (feature: SelectedFeature | null) => void;
   onViewChange: (view: ViewState) => void;
   onError: (message: string) => void;
@@ -77,7 +88,7 @@ async function createPoiImage(id: string): Promise<{ data: RgbaImage; ratio: num
  * Returns:
  *   The map container element.
  */
-export function MapView({ style, threeD, onSelect, onViewChange, onError }: MapViewProps) {
+export function MapView({ style, threeD, focus = null, onSelect, onViewChange, onError }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -173,6 +184,12 @@ export function MapView({ style, threeD, onSelect, onViewChange, onError }: MapV
     // 若 diff 無法套用（例如 source 網址改變），MapLibre 會自動退回完整重載
     map.setStyle(style, { diff: true });
   }, [style]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || !focus) return;
+    map.fitBounds(focus.bounds, { padding: FOCUS_PADDING, maxZoom: FOCUS_MAX_ZOOM, duration: 1000 });
+  }, [focus, loaded]);
 
   // 切換 3D 時調整相機：開啟時傾斜並確保至少在 3D 建物出現的 zoom；關閉時回正
   useEffect(() => {

@@ -1,13 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
-import { ROUTE_1 } from './bus/busData';
-import { useBusPositions } from './bus/useBusPositions';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { busBounds, ROUTE_1 } from './bus/busData';
+import { loadBusRouteId, saveBusRouteId } from './bus/busRoutes';
+import { useBusPositions, useBusRoutes } from './bus/useBusPositions';
 import { BusStatus } from './components/BusStatus';
 import { FeatureInfo } from './components/FeatureInfo';
 import { LayerPanel } from './components/LayerPanel';
 import { StyleSwitcher } from './components/StyleSwitcher';
 import { ViewModeToggle } from './components/ViewModeToggle';
 import type { AppConfig } from './config';
-import { MapView, type SelectedFeature, type ViewState } from './map/MapView';
+import { MapView, type MapFocus, type SelectedFeature, type ViewState } from './map/MapView';
 import { buildStyle, paletteOf, type LayerGroupId, type ThemeId } from './map/style';
 import { browserStorage, loadTheme, saveTheme } from './map/themeStorage';
 
@@ -33,7 +34,32 @@ export function App({ config }: AppProps) {
   const [threeD, setThreeD] = useState(false);
   // 圖層關閉時停止輪詢（每次都要下載全市約 50 KB）
   const busesOn = !hiddenGroups.has('buses');
-  const bus = useBusPositions(ROUTE_1, busesOn);
+  const busRoutes = useBusRoutes(busesOn);
+  const [busRouteId, setBusRouteId] = useState(() => loadBusRouteId(browserStorage()));
+  // 記住的路線若已停駛（不在清單中），退回 1 號
+  const busRoute = useMemo(
+    () => busRoutes.routes?.find((r) => r.id === busRouteId) ?? ROUTE_1,
+    [busRoutes.routes, busRouteId],
+  );
+  const bus = useBusPositions(busRoute, busesOn);
+
+  // 使用者選了路線 → 等該路線的車輛資料出現後縮放過去（路線常在目前畫面外）
+  const [focus, setFocus] = useState<MapFocus | null>(null);
+  const focusPending = useRef(false);
+  useEffect(() => {
+    if (!focusPending.current) return;
+    const bounds = busBounds(bus.buses);
+    if (!bounds) return;
+    focusPending.current = false;
+    setFocus({ bounds });
+  }, [bus.buses]);
+
+  const selectBusRoute = useCallback((id: string) => {
+    setBusRouteId(id);
+    saveBusRouteId(browserStorage(), id);
+    focusPending.current = true;
+  }, []);
+
   const style = useMemo(
     () => buildStyle(config.martinUrl, { theme, hiddenGroups, threeD, buses: bus.buses }),
     [config.martinUrl, theme, hiddenGroups, threeD, bus.buses],
@@ -63,7 +89,15 @@ export function App({ config }: AppProps) {
         <StyleSwitcher theme={theme} onChange={changeTheme} />
         <ViewModeToggle threeD={threeD} buildingsHidden={hiddenGroups.has('buildings')} onChange={setThreeD} />
         <LayerPanel hiddenGroups={hiddenGroups} palette={paletteOf(theme)} onToggle={toggleGroup} />
-        {busesOn && <BusStatus route={ROUTE_1} state={bus} palette={paletteOf(theme)} />}
+        {busesOn && (
+          <BusStatus
+            route={busRoute}
+            routes={busRoutes}
+            state={bus}
+            palette={paletteOf(theme)}
+            onSelectRoute={selectBusRoute}
+          />
+        )}
         <FeatureInfo feature={selected} onClose={() => setSelected(null)} />
       </aside>
 
@@ -71,6 +105,7 @@ export function App({ config }: AppProps) {
         <MapView
           style={style}
           threeD={threeD}
+          focus={focus}
           onSelect={setSelected}
           onViewChange={setView}
           onError={setMapError}

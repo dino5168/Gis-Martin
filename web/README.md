@@ -48,7 +48,9 @@ pnpm dev                            # http://localhost:5173
   - 分組（`PoiGroup`，9 組：餐飲／購物／醫療／交通／公共教育／休閒娛樂／觀光／古蹟／辦公金融）決定圓底顏色，每個主題各有一組色（`Palette.poiFood` 等，`POI_GROUP_COLOR`）。圖示 id 為 `maki-{圖示}-{分組}-{主題}`。
   - 產生方式：`MapView` 以 `map.setMissingStyleImageResolver()` 在第一次用到時非同步把 SVG 轉成遮罩（`makiGlyphs.ts`，快取 Promise）再由純函式 `createIconImage()` 合成。**不要改回 `styleimagemissing`**：MapLibre 6 起該事件的 listener 無法補上當次請求的圖片，首批圖磚會缺圖。
   - SVG 以 `?raw` 只打包用到的 104 個（全部 215 個約 164 KB）；增減對照表時同步 `makiGlyphs.ts` 的 import（`Record<MakiName, string>` 型別與測試會抓漏）。
-- **公車動態（1 號公車）**：`src/bus/`。瀏覽器每 30 秒直接抓 Data.Taipei 的 `https://tcgbusfs.blob.core.windows.net/blobbus/GetBusData.gz`（CORS `*`、免金鑰；全市約 2,100 輛、gzip 約 50 KB），以 `DecompressionStream('gzip')` 解壓（伺服器回 `application/octet-stream`，瀏覽器不會自動解壓），`parseBusData()` 驗證後篩 `ROUTE_1.routeIds`（`10723` 主線、`160559` 狗狗公車）。座標為 WGS84＝EPSG:4326，直接作為 GeoJSON。
+- **公車動態**：`src/bus/`。瀏覽器每 30 秒直接抓 Data.Taipei 的 `https://tcgbusfs.blob.core.windows.net/blobbus/GetBusData.gz`（CORS `*`、免金鑰；全市約 2,100 輛、gzip 約 50 KB），以 `DecompressionStream('gzip')` 解壓（伺服器回 `application/octet-stream`，瀏覽器不會自動解壓），`parseBusData()` 驗證後篩選目前路線。座標為 WGS84＝EPSG:4326，直接作為 GeoJSON。
+  - **路線下拉選單**：開啟圖層時抓一次 `GetRoute.gz`（約 76 KB），`parseBusRoutes()` 依 `Id` 合併子路線（共約 416 條），自然排序（1、2、10、307、紅5…）。**`GetBusData.RouteID` 對應的是 `GetRoute.pathAttributeId`，不是 `Id`**；GoBack 0＝往 `destinationZh`、1＝往 `departureZh`。選擇存在 localStorage（`gis-martin.busRoute`），預設與清單載入前的備援是 1 號（`ROUTE_1`）。
+  - 換路線不重新下載：`useBusPositions` 保留最近一次的全市快照，換路線時立即重新篩選；使用者選路線後自動 `fitBounds` 到該路線目前的車輛（maxZoom 15）。
   - 車輛位置**放在 style 裡**（`buildStyle({ buses })` 的 `buses` GeoJSON source），由同一次 `setStyle` diff 更新；若在 style 外 `setData`，下一次 setStyle（切主題、開關圖層）會被比對回空資料。
   - 圖示：`bus-{go|back|unknown}-{主題}`（Maki `bus` 圓底，去程／返程不同色：`Palette.busGo`／`busBack`）＋ `bus-arrow-*`（Maki `triangle`，依 `Azimuth` 旋轉、繞在圓外指出行進方向）。
   - 「公車動態」圖層關閉或分頁在背景（`visibilitychange`）時停止輪詢；下載失敗保留上一筆位置並在側欄顯示錯誤。

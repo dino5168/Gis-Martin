@@ -45,7 +45,7 @@ export const LAYER_GROUPS = [
   { id: 'buildings', label: '建物' },
   { id: 'pois', label: '興趣點' },
   { id: 'labels', label: '文字標註' },
-  { id: 'buses', label: '公車動態（1 號）' },
+  { id: 'buses', label: '公車動態' },
 ] as const;
 export type LayerGroupId = (typeof LAYER_GROUPS)[number]['id'];
 

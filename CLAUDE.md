@@ -93,7 +93,7 @@ Get-Content C:\ProgramData\MartinTiles\logs\MartinTiles.out.log -Tail 30
 - 捷運／高鐵路線色：路線色在 OSM route 關聯（不在軌道 way）→ Lua 匯入 `transit_routes`／`transit_masters`，`01` 合併成 `transit_lines`（route_master 顏色優先；高鐵 OSM 無色，固定 `#CA4F0F`）；前端 `railways` 灰軌之上疊 `transit-casing`／`transit-line`。
 - 行政區名稱標註用 `boundary_labels` 代表點（`boundaries` 層內的 Point），不可掛在面上，否則多島縣市每塊島重複標註。
 - POI 圖示：Maki（CC0）SVG，對照表 `style.ts` 的 `POI_MAKI`（`class/subclass` → [圖示, 分組]）＋`POI_CLASS_MAKI`（大類預設）；分組決定圓底顏色（`POI_GROUP_COLOR`）。圖示由 `map.setMissingStyleImageResolver()` 依需求非同步產生——**MapLibre 6 的 `styleimagemissing` listener 無法補上當次請求的圖片**，用它會讓首批圖磚缺圖。圖示 id 含分組與主題（`maki-lodging-tourism-dark`）。增減圖示時 `makiGlyphs.ts` 的 `?raw` import 要同步（`Record<MakiName,…>` 型別與測試會抓漏）。
-- 公車動態：前端直接輪詢 Data.Taipei `blobbus/GetBusData.gz`（CORS `*`、gzip 需 `DecompressionStream` 解壓、WGS84），不經 Martin／PostGIS；位置以 GeoJSON source 放在 `buildStyle({ buses })` 內，**不要在 style 外 `setData`**（會被下一次 setStyle diff 蓋回空資料）。
+- 公車動態：前端直接輪詢 Data.Taipei `blobbus/GetBusData.gz`（CORS `*`、gzip 需 `DecompressionStream` 解壓、WGS84），不經 Martin／PostGIS；路線清單 `GetRoute.gz`，**`BusData.RouteID` ＝ `GetRoute.pathAttributeId`（不是 `Id`）**；位置以 GeoJSON source 放在 `buildStyle({ buses })` 內，**不要在 style 外 `setData`**（會被下一次 setStyle diff 蓋回空資料）。
 - 地圖樣式（主題）只換 `style.ts` 的 `Palette`，圖層結構共用；主題、圖層開關、3D 都烘進 `buildStyle()` 的結果，MapView 以 `setStyle(style, { diff: true })` 套用（不要再對個別圖層 `setLayoutProperty`，下一次 setStyle 會蓋掉）。OpenMapTiles 系列 style JSON（OSM Bright 等）與本專案 schema 不相容，不能直接載入。
 - 開發模式 `window.__map` 是 MapLibre 實例（production 不含）。Chrome 擴充截圖常逾時 → 用 `window.__map` 查詢或讀 canvas 像素驗證。
 

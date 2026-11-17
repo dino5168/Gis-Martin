@@ -9,23 +9,58 @@ export const BUS_DATA_URL = 'https://tcgbusfs.blob.core.windows.net/blobbus/GetB
 
 /** A bus route shown on the map. */
 export interface BusRoute {
+  /** GetRoute `Id` (one per signed route). */
+  id: string;
   /** Route name as signed on the bus. */
   name: string;
-  /** Data.Taipei RouteID values (main route plus variants). */
+  /**
+   * GetRoute `pathAttributeId` values of the route's variants; GetBusData `RouteID`
+   * refers to these, not to `Id` (verified 2026-11-17: 394 of 398 live RouteIDs).
+   */
   routeIds: readonly string[];
-  /** Terminal reached on the outbound trip (GoBack = 0). */
+  /** Terminal reached on the outbound trip (GoBack = 0; GetRoute `destinationZh`). */
   outboundTo: string;
-  /** Terminal reached on the return trip (GoBack = 1). */
+  /** Terminal reached on the return trip (GoBack = 1; GetRoute `departureZh`). */
   returnTo: string;
 }
 
-/** 1 號公車（欣欣客運，萬華 ↔ 松仁路）；160559 為「1 狗狗公車」班次，同一路線。 */
+/**
+ * 1 號公車（欣欣客運，萬華 ↔ 松仁路）；160559 為「1 狗狗公車」班次。
+ * Default selection, and the fallback before the route list has loaded.
+ */
 export const ROUTE_1: BusRoute = {
+  id: '10723',
   name: '1',
   routeIds: ['10723', '160559'],
   outboundTo: '松仁路',
   returnTo: '萬華',
 };
+
+/**
+ * Downloads a Data.Taipei `.gz` blob and parses it as JSON.
+ *
+ * Args:
+ *   url: Blob URL.
+ *   signal: Aborts the request.
+ *
+ * Returns:
+ *   The parsed (still untrusted) JSON, or an error (network, HTTP, gzip or JSON failure).
+ */
+export async function fetchGzipJson(url: string, signal?: AbortSignal): Promise<Result<unknown>> {
+  try {
+    // blob 會被瀏覽器快取；即時資料一律不用快取
+    const res = await fetch(url, { cache: 'no-store', signal });
+    if (!res.ok) return err(`下載失敗：HTTP ${res.status}`);
+    if (!res.body) return err('下載失敗：沒有內容');
+    // 伺服器以 octet-stream 回傳 gzip 檔（沒有 Content-Encoding），瀏覽器不會自動解壓
+    const text = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).text();
+    const json: unknown = JSON.parse(text);
+    return ok(json);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return err('已取消');
+    return err(`讀取失敗：${e instanceof Error ? e.message : String(e)}`);
+  }
+}
 
 /** One validated vehicle position. */
 export interface BusPosition {
@@ -124,19 +159,8 @@ export function parseBusData(json: unknown): Result<BusSnapshot> {
  *   The validated snapshot, or an error (network, HTTP, gzip or JSON failure).
  */
 export async function fetchBusData(signal?: AbortSignal): Promise<Result<BusSnapshot>> {
-  try {
-    // blob 會被瀏覽器快取；即時資料一律不用快取
-    const res = await fetch(BUS_DATA_URL, { cache: 'no-store', signal });
-    if (!res.ok) return err(`公車資料下載失敗：HTTP ${res.status}`);
-    if (!res.body) return err('公車資料下載失敗：沒有內容');
-    // 伺服器以 octet-stream 回傳 gzip 檔（沒有 Content-Encoding），瀏覽器不會自動解壓
-    const text = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).text();
-    const json: unknown = JSON.parse(text);
-    return parseBusData(json);
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') return err('已取消');
-    return err(`公車資料讀取失敗：${e instanceof Error ? e.message : String(e)}`);
-  }
+  const json = await fetchGzipJson(BUS_DATA_URL, signal);
+  return json.error ? err(`公車位置${json.error.message}`) : parseBusData(json.data);
 }
 
 /**
@@ -167,6 +191,28 @@ export interface BusFeatureCollection {
 }
 
 export const EMPTY_BUSES: BusFeatureCollection = { type: 'FeatureCollection', features: [] };
+
+/**
+ * Bounding box of the buses, for zooming to a newly selected route.
+ *
+ * Args:
+ *   fc: Bus features.
+ *
+ * Returns:
+ *   `[[west, south], [east, north]]` in EPSG:4326, or null when there are no buses.
+ */
+export function busBounds(fc: BusFeatureCollection): [[number, number], [number, number]] | null {
+  if (fc.features.length === 0) return null;
+  let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const { geometry } of fc.features) {
+    const [lng, lat] = geometry.coordinates;
+    w = Math.min(w, lng);
+    s = Math.min(s, lat);
+    e = Math.max(e, lng);
+    n = Math.max(n, lat);
+  }
+  return [[w, s], [e, n]];
+}
 
 /**
  * Converts the buses of one route to GeoJSON for the map.
