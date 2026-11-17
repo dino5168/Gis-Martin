@@ -73,7 +73,7 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 >
 > - [x] 前端：Cloudflare Pages 專案 `gis-martin` → https://gis-martin.pages.dev（GitHub `main` push 自動部署；root `web`、`pnpm install --frozen-lockfile && pnpm build`、輸出 `dist`、`NODE_VERSION=22.18.0`、`PNPM_VERSION=10.32.1`）。`_headers` 已生效（assets immutable、index.html no-cache），worker `.mjs` 正常提供
 > - [x] **暫時以 quick tunnel 測試成功**（2026-11-17）：`cloudflared tunnel --url http://127.0.0.1:3000`（Claude Code 背景程序，關閉即斷）→ Pages `VITE_MARTIN_URL` 設為該 `*.trycloudflare.com` 網址並重新部署，地圖正常顯示。Martin CORS 已加 `https://gis-martin.pages.dev`
->   - 2026-11-17 Pages 專案 Git 連線失效（GitHub App 授權調整後，dashboard 重新連結選單選不到 repo）→ 刪除後以相同名稱、設定、環境變數重建
+>   - 2026-11-17 Pages 專案 Git 連線失效（GitHub App 授權調整後，dashboard 重新連結選單選不到 repo）→ 刪除後以相同名稱、設定、環境變數重建；重建後仍斷線，根因是 Cloudflare 記錄的 GitHub App 安裝失效 → 在 GitHub 完整 Uninstall 後從 Cloudflare 重新安裝（Only select repositories）才恢復
 >   - quick tunnel 每次重啟網址會變 → 需同步改 Pages 的 `VITE_MARTIN_URL` 並重新部署；無 edge 快取、無路徑白名單，僅供測試
 > - [ ] 後端：Cloudflare 帳號尚無網域 → 需先決定網域，才能建 named tunnel（計畫 §4）
 
