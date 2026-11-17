@@ -29,9 +29,10 @@ interface MapViewProps {
   onError: (message: string) => void;
 }
 
-// 台灣本島中心；maxBounds 稍大於 Martin bounds（含東沙、金馬）；改動時同步 martin/05_land.sql 裁切範圍與 config.yaml land bounds
-const INITIAL_CENTER: [number, number] = [120.97, 23.7];
-const INITIAL_ZOOM = 7;
+// 起始畫面：新北市三峽區一帶（EPSG:4326 經緯度）
+const INITIAL_CENTER: [number, number] = [121.37621, 24.93873];
+const INITIAL_ZOOM = 16;
+// maxBounds 稍大於 Martin bounds（含東沙、金馬）；改動時同步 martin/05_land.sql 裁切範圍與 config.yaml land bounds
 const MAX_BOUNDS: [[number, number], [number, number]] = [[114.5, 19.5], [124.5, 27.5]];
 // 3D 模式的相機：60° 傾斜可看出高度，又不至於讓遠方圖磚數暴增
 const PITCH_3D = 60;
