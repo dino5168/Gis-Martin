@@ -69,6 +69,12 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 
 ### 1. 把前端 build 部署成正式網站（優先）
 
+> **2026-11-17 改採 Cloudflare 前後端分離**（計畫：`Plans/6-前後端分離-實作.md`），下方原「同機反向代理」方案暫緩。
+>
+> - [x] 前端：Cloudflare Pages 專案 `gis-martin` → https://gis-martin.pages.dev（GitHub `main` push 自動部署；root `web`、`pnpm install --frozen-lockfile && pnpm build`、輸出 `dist`、`NODE_VERSION=22.18.0`、`PNPM_VERSION=10.32.1`）。`_headers` 已生效（assets immutable、index.html no-cache），worker `.mjs` 正常提供
+> - [ ] **尚未設 `VITE_MARTIN_URL`** → 網站目前顯示「設定錯誤」。待後端有 https 網址後到 Pages → 設定 → 環境變數補上並重新部署
+> - [ ] 後端：Cloudflare 帳號尚無網域 → 需先決定網域，才能建 named tunnel（計畫 §4）
+
 目前前端只在 `pnpm dev` 下運作，且 Vite 開發伺服器跑在 Claude Code 的背景程序，關閉即停止。
 
 建議方向（實作前再確認需求，例如：只在內網？要不要 HTTPS／網域？）：
@@ -100,7 +106,7 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 - [ ] LOD1 高度 87% 是預設 2 層推估：評估接內政部國土測繪中心三維建物模型（LOD1，實測高度），需先確認授權、格式（CityGML／3D Tiles／Shapefile）與年份；若能取得「外框＋高度」，可匯入 PostGIS 取代 `render_height` 來源，前端不需改
 - [ ] 3D 模式下點選建物：POI 圖層在上層，點到 POI 時會優先顯示 POI（目前行為，是否要改為優先建物待確認）
 - [ ] z9 landuse 首次產生約 500 ms（有快取後無影響）
-- [ ] 專案尚未納入 git：建議 `git init`（`.gitignore` 需排除 `web/node_modules`、`web/dist`、`web/.env.local`、`*.log`）
+- [x] 專案納入 git：GitHub private repo `dino5168/Gis-Martin`（2026-11-17）；`taiwan.lua` 原始碼移入 `osm2pgsql/`
 - [ ] 資料更新流程自動化（定期下載 Geofabrik 台灣 PBF → 重匯 → 01/02 → 重啟服務）
 - [ ] 淡水外海曾看到一塊方形水域，未查明是否為 OSM 原始資料
 - [ ] 前端元件（MapView、App）目前無自動化測試，僅以瀏覽器手動驗證
