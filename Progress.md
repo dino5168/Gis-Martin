@@ -5,7 +5,13 @@
 
 ## 目前狀態（一句話）
 
-整條管線已在本機運作：PostGIS 有完整台灣資料，Martin 以 Windows 服務開機自動提供 MVT（9 層），React 前端在開發模式（`pnpm dev`）可瀏覽、點選、切換圖層、2D／3D（LOD1 建物）與捷運路線色；行政界只畫陸上邊界、標註不重複（2026-11-17）；正式機部署包已打包完成、待搬到正式機（`SetUp/setup.md`）；**尚未部署成正式網站**。
+整條管線已在本機運作：PostGIS 有完整台灣資料，Martin 以 Windows 服務開機自動提供 MVT（9 層）。**前端已上線** https://gis-martin.pages.dev（Cloudflare Pages，GitHub `main` push 自動部署），功能：6 種地圖樣式下拉選單、2D／3D（LOD1）、Maki POI 圖示（9 分組配色）、**台北市公車即時動態（416 條路線下拉選單）**。**後端仍靠 quick tunnel 暫時對外**（Claude Code 背景程序、網址會變）→ 需網域＋named tunnel 才能長期運作。
+
+### 2026-11-17 收工狀態（下次接續）
+
+- 最新 commit：`5d25ab2`（公車路線下拉選單）；Pages 部署成功
+- quick tunnel `https://sugar-constant-gif-water.trycloudflare.com` 跑在本次 Claude Code session 背景，**session 結束即失效** → 正式站地圖會空白（公車動態不受影響，因為直接連 Data.Taipei）。重開：`cloudflared tunnel --url http://127.0.0.1:3000` → 把新網址填到 Pages 環境變數 `VITE_MARTIN_URL` → 重新部署
+- 起始畫面：三峽 121.37621, 24.93873, z16（`MapView.tsx` 的 `INITIAL_CENTER`）
 
 ## 下次進來先做
 
@@ -41,7 +47,18 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 | 17 | 村里界也只畫陸上共用邊界 | `boundary_lines` 加入 level 9（自成一級配對）：村里 7,764 個有線、14 個無線（獨立島嶼）；建表時間 19 → 65 秒；台北 z12–z14 boundaries 圖磚 +80～170 bytes；`03_verify` 新增村里數檢查並通過 | Martin-Setup.md「Zoom 規則摘要」 |
 | 18 | 正式機部署文件（PostgreSQL + Martin） | `SetUp/setup.md`：開發機 `pg_dump -Fc`（排除 extension、不含擁有者／權限）→ 正式機建角色與 `ALTER DEFAULT PRIVILEGES` → `pg_restore --single-transaction` → WinSW 服務；資料更新流程與回滾。已在開發機以測試 DB 演練：匯出 28 秒／314 MB、還原 29 秒、`03_verify` 通過、`martin_reader` 可出圖（測試 DB 已刪除）。**部署包已完成**：`C:\gis\osm\deploy\`（dump 314 MB、martin.exe 1.16.1、config／SQL／服務腳本、WinSW、`SHA256SUMS.txt` 已驗證）；修正 §1 校驗碼指令（管線寫檔會把 SHA256SUMS.txt 自己列入） | `SetUp/setup.md` |
 
-### 2026-11-17 工作紀錄
+| 19 | 專案上 GitHub + 前端上 Cloudflare Pages（`Plans/6-前後端分離-實作.md`） | private repo `dino5168/Gis-Martin`；Pages `gis-martin`（root `web`、`pnpm install --frozen-lockfile && pnpm build`）；`_headers` 快取規則；正式 build 禁止 http 的 `VITE_MARTIN_URL`；Martin CORS 加 `https://gis-martin.pages.dev`。Git 自動部署曾失效，根因為 Cloudflare 端 GitHub App 安裝失效 → GitHub 完整 Uninstall 後從 Cloudflare 重裝才恢復 | `Plans/6-前後端分離-實作.md` |
+| 20 | 地圖樣式（`Tasks/1`、`Tasks/2`） | 下拉選單 6 種：預設／OSM Bright／柔和／暗色／黑白／黑白淡色（只換色盤、圖層共用，`setStyle` diff 套用；選擇存 localStorage）。OpenMapTiles 系 style JSON 與本專案 schema 不相容，只取配色；Satellite／Terrain／Watercolor 需 raster 來源，未做 | web/README.md |
+| 21 | 興趣點類別整理（`Tasks/3`） | 8 大類、693 子類別統計表（筆數、有名稱、出圖 zoom）；**公車站牌（`public_transport=platform`+`highway=bus_stop`）改為 z16 出圖**（49,039 筆，z14 合併圖磚 450 → 456 KB） | `Tasks/3-興趣點資料整理.md` |
+| 22 | POI 改用 Maki 圖示（`Tasks/4`） | `@mapbox/maki` 8.2.0（CC0，可商用）；204 個 `class/subclass` → 104 個圖示、9 分組配色＋大類預設圖示；**修正 MapLibre 6 `styleimagemissing` 無法補當次請求圖片的問題 → 改用 `setMissingStyleImageResolver()`**（原本首批圖磚會缺圖示與道路名稱） | web/README.md |
+| 23 | 台北市公車動態（`Tasks/Router/1-串接API.md`） | 前端直接輪詢 Data.Taipei `GetBusData.gz`（CORS `*`、免金鑰、30 秒、`DecompressionStream` 解壓、WGS84）；去／返程配色＋依方位角旋轉的方向箭頭；路線下拉選單 416 條（`GetRoute.gz`，**`RouteID`＝`pathAttributeId`**），選路線自動縮放；圖層關閉或背景分頁停止輪詢 | web/README.md |
+
+### 2026-11-17 工作紀錄（下午）
+
+- #19–#23；前端 vitest 112 項、`tsc --noEmit`、`pnpm build` 通過，各功能皆以瀏覽器驗證
+- DB：`01` 的 pois `minzoom` 區段單獨重跑（公車站牌 z16）、`03_verify` 通過、`04_benchmark` 前後比對、MartinTiles 已重啟
+
+### 2026-11-17 工作紀錄（上午）
 
 - 處理項目：#12–#17（行政區標註、陸地範圍、國界與各級行政界的海上虛線）
 - 已套用到 DB：`01` 中 `boundary_labels`、`boundary_lines` 兩段單獨執行（未整份重跑 01）；`05_land.sql` 以重新載入的全球 land-polygons 重跑；`02` 已重建；`03_verify` 全數通過；MartinTiles 已重啟
@@ -112,6 +129,17 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 - [ ] 資料更新流程自動化（定期下載 Geofabrik 台灣 PBF → 重匯 → 01/02 → 重啟服務）
 - [ ] 淡水外海曾看到一塊方形水域，未查明是否為 OSM 原始資料
 - [ ] 前端元件（MapView、App）目前無自動化測試，僅以瀏覽器手動驗證
+- [ ] `tourism/information` 1.6 萬筆（其中 1.1 萬無名稱，多為步道導覽牌）在 z14 全數出圖，山區（陽明山）很擠 → 建議無名稱者延後到 z16（改 `01` 一行）
+- [ ] Maki 圖示 18 px 比原圓點大，碰撞偵測會藏掉較多 POI；若太稀疏，可把 z16 才出現的圖示縮為 15 px
+
+### 4. 公車動態（`Tasks/Router/`）
+
+- [ ] 車輛位置 30～60 秒才更新，畫面上會跳動 → 前端補間動畫（平滑移動）
+- [ ] 站牌與到站時間：`GetStopLocation.gz`（站位）＋`GetEstimateTime.gz`（預估到站秒數）＋`GetPathDetail.gz`（站序）
+- [ ] 路線軌跡（Data.Taipei「臺北市公車路線軌跡」資料集）畫出整條路線
+- [ ] 多人使用時改由後端統一抓取、只轉發所需路線（目前每個使用者每 30 秒下載全市約 50 KB）
+- [ ] `DutyStatus`／`BusStatus` 代碼意義需對照北市公運處說明文件後再決定是否用於顯示（如排除非營運車輛）
+- [ ] 新北市公車：同站台 `ntpcbus/GetBusData.gz`（未驗證）
 
 ---
 
@@ -126,4 +154,6 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 | Node / pnpm | 22.18.0 / 10.32.1 |
 | React / TypeScript / Vite / vitest | 19.3 / 7.0.2 / 8.3.8 / 5.1.0 |
 | maplibre-gl / style-spec | 6.18.0 / 26.6.0 |
+| @mapbox/maki | 8.2.0（CC0 1.0） |
+| cloudflared | 2026.10.0（quick tunnel；named tunnel 待網域） |
 | 資料 | `taiwan-261112.osm.pbf`、osmdata land-polygons（2026-11-13） |
