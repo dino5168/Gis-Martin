@@ -102,7 +102,7 @@ CREATE INDEX boundaries_geom_minzoom_idx ON public.boundaries USING gist (geom, 
 -- pois：依重要性分級。z14 是 Martin 最大 zoom，z15+ 由 MapLibre overzoom z14 圖磚，
 -- 所以 minzoom 15/16 的 POI 也放進 z14 圖磚，再由前端依 `minzoom <= zoom` 篩選疏密。
 --   11 火車站｜12 捷運站｜13 醫院、大學、主要景點｜14 公共設施、旅館、大型商場
---   15 日常去處（餐飲、銀行、便利商店、藥局、宮廟…）｜16 其餘有名稱的 POI
+--   15 日常去處（餐飲、銀行、便利商店、藥局、宮廟…）｜16 公車站牌、其餘有名稱的 POI
 --   NULL 不出圖：鐵路設施節點、街道設施（停車場出入口、飲水機、垃圾桶…）、空店面、無名稱的次要 POI
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.pois DROP COLUMN IF EXISTS minzoom;
@@ -112,7 +112,10 @@ ALTER TABLE public.pois ADD COLUMN minzoom smallint GENERATED ALWAYS AS (
         WHEN class = 'railway' AND subclass IN ('halt', 'tram_stop')        THEN 13
         WHEN class = 'railway'                                              THEN NULL
         WHEN class = 'public_transport' AND subclass = 'station'            THEN 12
-        WHEN class = 'public_transport'                                     THEN NULL  -- 與 railway/bus_stop 重複
+        -- 公車站牌：台灣 OSM 以 public_transport=platform + highway=bus_stop（或 bus=yes）標註，約 4.9 萬筆
+        WHEN class = 'public_transport' AND subclass = 'platform'
+             AND (tags->>'highway' = 'bus_stop' OR tags->>'bus' = 'yes')    THEN 16
+        WHEN class = 'public_transport'                                     THEN NULL  -- stop_position 等與站牌重複
         WHEN class = 'amenity' AND subclass IN ('hospital', 'university', 'college') THEN 13
         WHEN class = 'tourism' AND subclass IN ('attraction', 'museum', 'zoo', 'theme_park', 'viewpoint') THEN 13
 

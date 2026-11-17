@@ -35,7 +35,7 @@
 | roads | motorway/trunk z5、primary z8、secondary z10、tertiary z11、residential z12、service z13、footway/path z14；rail z8、捷運 z10 |
 | transit | 路線色線形（`transit_lines`）：高鐵 z7、捷運／單軌 z10、輕軌 z11、路面電車 z12；`colour` 取 route_master 優先、其次 route，高鐵固定 `#CA4F0F`；欄位 `kind, ref, network, name, colour` |
 | buildings | z13+（只有外框）；z14 起加 `building:part` 分段與 LOD1 高度：`render_height`／`render_min_height`（公尺）、`height_source`（`height` 標註／`levels` × 3.2 m）。無高度資料者（約 87%）預設 2 層 6.4 m，為省圖磚大小**不輸出**高度與來源，前端缺值即視為預設。`has_parts` 標記有分段的外框（3D 時隱藏外框改畫分段） |
-| pois | 火車站 z11、捷運站 z12、醫院/大學/景點 z13、公共設施/旅館/大型商場 z14、日常去處（餐飲、銀行、便利商店、宮廟…）z15、其餘有名稱者 z16；街道設施（停車場出入口、飲水機、垃圾桶…）、空店面、無名雜項、平交道等不出圖。z14 圖磚含 minzoom ≤ 16 並輸出 `minzoom` 屬性，z15+ 由前端依 zoom 篩選＋symbol 碰撞偵測控制疏密 |
+| pois | 火車站 z11、捷運站 z12、醫院/大學/景點 z13、公共設施/旅館/大型商場 z14、日常去處（餐飲、銀行、便利商店、宮廟…）z15、公車站牌（`public_transport=platform` + `highway=bus_stop`／`bus=yes`）與其餘有名稱者 z16；街道設施（停車場出入口、飲水機、垃圾桶…）、空店面、無名雜項、平交道等不出圖。z14 圖磚含 minzoom ≤ 16 並輸出 `minzoom` 屬性，z15+ 由前端依 zoom 篩選＋symbol 碰撞偵測控制疏密 |
 
 ---
 
