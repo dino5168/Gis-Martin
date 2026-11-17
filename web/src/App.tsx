@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FeatureInfo } from './components/FeatureInfo';
 import { LayerPanel } from './components/LayerPanel';
+import { StyleSwitcher } from './components/StyleSwitcher';
 import { ViewModeToggle } from './components/ViewModeToggle';
 import type { AppConfig } from './config';
 import { MapView, type SelectedFeature, type ViewState } from './map/MapView';
-import { buildStyle, type LayerGroupId } from './map/style';
+import { buildStyle, paletteOf, type LayerGroupId, type ThemeId } from './map/style';
+import { browserStorage, loadTheme, saveTheme } from './map/themeStorage';
 
 interface AppProps {
   config: AppConfig;
@@ -20,12 +22,21 @@ interface AppProps {
  *   The application shell.
  */
 export function App({ config }: AppProps) {
-  const style = useMemo(() => buildStyle(config.martinUrl), [config.martinUrl]);
+  const [theme, setTheme] = useState<ThemeId>(() => loadTheme(browserStorage()));
   const [hiddenGroups, setHiddenGroups] = useState<ReadonlySet<LayerGroupId>>(() => new Set());
   const [selected, setSelected] = useState<SelectedFeature | null>(null);
   const [view, setView] = useState<ViewState | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [threeD, setThreeD] = useState(false);
+  const style = useMemo(
+    () => buildStyle(config.martinUrl, { theme, hiddenGroups, threeD }),
+    [config.martinUrl, theme, hiddenGroups, threeD],
+  );
+
+  const changeTheme = useCallback((next: ThemeId) => {
+    setTheme(next);
+    saveTheme(browserStorage(), next);
+  }, []);
 
   const toggleGroup = useCallback((group: LayerGroupId) => {
     setHiddenGroups((prev) => {
@@ -43,15 +54,15 @@ export function App({ config }: AppProps) {
           <h1>台灣向量地圖</h1>
           <p>OSM → PostGIS → Martin → MapLibre</p>
         </header>
+        <StyleSwitcher theme={theme} onChange={changeTheme} />
         <ViewModeToggle threeD={threeD} buildingsHidden={hiddenGroups.has('buildings')} onChange={setThreeD} />
-        <LayerPanel hiddenGroups={hiddenGroups} onToggle={toggleGroup} />
+        <LayerPanel hiddenGroups={hiddenGroups} palette={paletteOf(theme)} onToggle={toggleGroup} />
         <FeatureInfo feature={selected} onClose={() => setSelected(null)} />
       </aside>
 
       <main className="map-area">
         <MapView
           style={style}
-          hiddenGroups={hiddenGroups}
           threeD={threeD}
           onSelect={setSelected}
           onViewChange={setView}

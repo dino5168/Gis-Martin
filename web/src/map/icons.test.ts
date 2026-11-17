@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createDotImage, parseHex, POI_ICONS } from './icons';
+import { createDotImage, parseHex } from './icons';
+import { POI_ICONS, THEMES } from './style';
 
 const pixel = (img: ReturnType<typeof createDotImage>, x: number, y: number): number[] => {
   const i = (y * img.width + x) * 4;
@@ -47,6 +48,20 @@ describe('POI_ICONS', () => {
   it('uses valid palette colours', () => {
     for (const { fill } of Object.values(POI_ICONS)) {
       expect(() => parseHex(fill)).not.toThrow();
+    }
+  });
+
+  it('defines one icon set per theme so switching themes never reuses a stale colour', () => {
+    for (const t of THEMES) {
+      expect(Object.keys(POI_ICONS).filter((id) => id.endsWith(`-${t.id}`))).toHaveLength(3);
+    }
+  });
+});
+
+describe('theme palettes', () => {
+  it.each(THEMES.map((t) => [t.id, t.palette] as const))('%s uses #rrggbb colours only', (_id, palette) => {
+    for (const [key, colour] of Object.entries(palette)) {
+      expect(() => parseHex(colour), key).not.toThrow();
     }
   });
 });

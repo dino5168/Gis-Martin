@@ -1,18 +1,9 @@
-import { PALETTE } from './style';
-
 /** Raw RGBA image accepted by `map.addImage` (non-premultiplied). */
 export interface RgbaImage {
   width: number;
   height: number;
   data: Uint8Array;
 }
-
-/** POI dot icons referenced by the `pois-symbol` layer's `icon-image`. */
-export const POI_ICONS: Readonly<Record<string, { fill: string; diameter: number }>> = {
-  'poi-transit': { fill: PALETTE.poiTransit, diameter: 12 },
-  'poi-major': { fill: PALETTE.poi, diameter: 12 },
-  'poi-default': { fill: PALETTE.poi, diameter: 9 },
-};
 
 /**
  * Parses `#rrggbb` into RGB components.

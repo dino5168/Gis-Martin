@@ -47,8 +47,11 @@ export const LAYER_GROUPS = [
 ] as const;
 export type LayerGroupId = (typeof LAYER_GROUPS)[number]['id'];
 
-/** Map palette; the background is the sea and the `land` layer paints coastline polygons over it. */
-export const PALETTE = {
+/**
+ * Default map palette; the background is the sea and the `land` layer paints coastline polygons over it.
+ * Every value must be `#rrggbb` (POI dots are rasterised from it by icons.ts).
+ */
+const DEFAULT_PALETTE = {
   land: '#f4f1ea',
   sea: '#a8cfe6',
   water: '#a8cfe6',
@@ -82,7 +85,160 @@ export const PALETTE = {
   poiTransit: '#4f7fc7',
   label: '#3a3a3a',
   labelHalo: '#ffffff',
+  transitCasing: '#ffffff',
 } as const;
+
+/** Colour roles shared by every theme; themes only swap colours, never layers. */
+export type Palette = Readonly<Record<keyof typeof DEFAULT_PALETTE, string>>;
+
+/** Default palette, kept as a named export for callers that do not care about themes. */
+export const PALETTE: Palette = DEFAULT_PALETTE;
+
+// OSM Bright（OpenMapTiles，CC-BY 4.0）的配色近似值。原 style JSON 針對 OpenMapTiles schema，
+// 圖層與本專案 Martin 自訂 schema 不相容，因此只取色、圖層結構沿用本專案。
+const BRIGHT_PALETTE: Palette = {
+  land: '#f8f4f0',
+  sea: '#94c1e1',
+  water: '#94c1e1',
+  waterLine: '#94c1e1',
+  forest: '#dde7cc',
+  grass: '#d8e8c8',
+  farmland: '#e2ebd6',
+  residential: '#f1ece7',
+  commercial: '#f7eae7',
+  industrial: '#f9f4e0',
+  landuseOther: '#f1ede6',
+  building: '#e8e0d8',
+  buildingOutline: '#dfdbd7',
+  building3dLow: '#f2eae2',
+  building3dMid: '#dfdbd7',
+  building3dHigh: '#c9c1b8',
+  building3dTop: '#a8a097',
+  boundaryCounty: '#9e9cab',
+  boundaryTown: '#b9b7c4',
+  boundaryVillage: '#d3d1da',
+  motorway: '#ffcc88',
+  trunk: '#ffeeaa',
+  primary: '#ffeeaa',
+  secondary: '#fff4c6',
+  minorRoad: '#ffffff',
+  roadCasing: '#cfcdca',
+  path: '#c8a98a',
+  rail: '#bbbbbb',
+  subway: '#4f7fc7',
+  poi: '#8c6d62',
+  poiTransit: '#4f7fc7',
+  label: '#333333',
+  labelHalo: '#ffffff',
+  transitCasing: '#ffffff',
+};
+
+const DARK_PALETTE: Palette = {
+  land: '#2a2c30',
+  sea: '#1b2a3a',
+  water: '#1b2a3a',
+  waterLine: '#2c4a66',
+  forest: '#2c3a2e',
+  grass: '#2f3a30',
+  farmland: '#33372d',
+  residential: '#303136',
+  commercial: '#36302f',
+  industrial: '#33303a',
+  landuseOther: '#2e2f33',
+  building: '#3c3e44',
+  buildingOutline: '#4a4d54',
+  building3dLow: '#45484f',
+  building3dMid: '#565a62',
+  building3dHigh: '#6c717a',
+  building3dTop: '#8a8f98',
+  boundaryCounty: '#9a8fc0',
+  boundaryTown: '#6f6890',
+  boundaryVillage: '#4d4866',
+  motorway: '#b5653a',
+  trunk: '#8f6a3c',
+  primary: '#6f6346',
+  secondary: '#5a5446',
+  minorRoad: '#4a4c52',
+  roadCasing: '#1f2023',
+  path: '#6b5d4f',
+  rail: '#6b6b6b',
+  subway: '#6f9be0',
+  poi: '#e08a80',
+  poiTransit: '#7ea6e0',
+  label: '#e6e6e6',
+  labelHalo: '#1d1f22',
+  transitCasing: '#1d1f22',
+};
+
+/** Selectable map themes, in display order. */
+export const THEMES = [
+  { id: 'default', label: '預設', palette: PALETTE },
+  { id: 'bright', label: 'OSM Bright', palette: BRIGHT_PALETTE },
+  { id: 'dark', label: '暗色', palette: DARK_PALETTE },
+] as const satisfies readonly { id: string; label: string; palette: Palette }[];
+export type ThemeId = (typeof THEMES)[number]['id'];
+export const DEFAULT_THEME: ThemeId = 'default';
+
+/**
+ * Narrows an untrusted string (e.g. from localStorage) to a theme id.
+ *
+ * Args:
+ *   value: Candidate theme id.
+ *
+ * Returns:
+ *   True if `value` names a theme in THEMES.
+ */
+export function isThemeId(value: unknown): value is ThemeId {
+  return THEMES.some((t) => t.id === value);
+}
+
+/**
+ * Looks up the palette of a theme.
+ *
+ * Args:
+ *   theme: Theme id.
+ *
+ * Returns:
+ *   The theme's palette.
+ */
+export function paletteOf(theme: ThemeId): Palette {
+  return THEMES.find((t) => t.id === theme)?.palette ?? PALETTE;
+}
+
+/** POI dot kinds referenced by `pois-symbol`; colours come from the active palette. */
+const POI_ICON_KINDS = {
+  transit: { colorKey: 'poiTransit', diameter: 12 },
+  major: { colorKey: 'poi', diameter: 12 },
+  default: { colorKey: 'poi', diameter: 9 },
+} as const satisfies Record<string, { colorKey: keyof Palette; diameter: number }>;
+type PoiIconKind = keyof typeof POI_ICON_KINDS;
+
+/**
+ * Image id of a POI dot for a theme.
+ *
+ * The theme is part of the id: MapLibre keeps added images across `setStyle`,
+ * so a shared id would keep the previous theme's colour after switching.
+ *
+ * Args:
+ *   kind: POI dot kind.
+ *   theme: Theme id.
+ *
+ * Returns:
+ *   Image id such as `poi-major-dark`.
+ */
+export function poiIconId(kind: PoiIconKind, theme: ThemeId): string {
+  return `poi-${kind}-${theme}`;
+}
+
+/** Every POI image id the styles can request, mapped to how MapView should draw it. */
+export const POI_ICONS: Readonly<Record<string, { fill: string; diameter: number }>> = Object.fromEntries(
+  THEMES.flatMap((t) =>
+    (Object.keys(POI_ICON_KINDS) as PoiIconKind[]).map((kind) => {
+      const { colorKey, diameter } = POI_ICON_KINDS[kind];
+      return [poiIconId(kind, t.id), { fill: t.palette[colorKey], diameter }];
+    }),
+  ),
+);
 
 const PATH_CLASSES = ['footway', 'path', 'cycleway', 'steps', 'bridleway'];
 const MAJOR_ROADS = ['motorway', 'trunk', 'primary', 'secondary'];
@@ -119,24 +275,24 @@ export function roadWidth(extra: number): ExpressionSpecification {
   ];
 }
 
-const roadColor: ExpressionSpecification = [
+const roadColor = (p: Palette): ExpressionSpecification => [
   'match', ['get', 'class'],
-  ['motorway', 'motorway_link'], PALETTE.motorway,
-  ['trunk', 'trunk_link'], PALETTE.trunk,
-  ['primary', 'primary_link'], PALETTE.primary,
-  ['secondary', 'secondary_link'], PALETTE.secondary,
-  PALETTE.minorRoad,
+  ['motorway', 'motorway_link'], p.motorway,
+  ['trunk', 'trunk_link'], p.trunk,
+  ['primary', 'primary_link'], p.primary,
+  ['secondary', 'secondary_link'], p.secondary,
+  p.minorRoad,
 ];
 
-const landuseColor: ExpressionSpecification = [
+const landuseColor = (p: Palette): ExpressionSpecification => [
   'match', ['get', 'type'],
-  ['forest', 'wood', 'scrub', 'heath'], PALETTE.forest,
-  ['grass', 'grassland', 'meadow', 'park', 'garden', 'recreation_ground', 'golf_course', 'pitch', 'village_green'], PALETTE.grass,
-  ['farmland', 'orchard', 'farmyard', 'vineyard', 'plant_nursery', 'aquaculture'], PALETTE.farmland,
-  'residential', PALETTE.residential,
-  ['commercial', 'retail'], PALETTE.commercial,
-  ['industrial', 'quarry', 'landfill', 'railway'], PALETTE.industrial,
-  PALETTE.landuseOther,
+  ['forest', 'wood', 'scrub', 'heath'], p.forest,
+  ['grass', 'grassland', 'meadow', 'park', 'garden', 'recreation_ground', 'golf_course', 'pitch', 'village_green'], p.grass,
+  ['farmland', 'orchard', 'farmyard', 'vineyard', 'plant_nursery', 'aquaculture'], p.farmland,
+  'residential', p.residential,
+  ['commercial', 'retail'], p.commercial,
+  ['industrial', 'quarry', 'landfill', 'railway'], p.industrial,
+  p.landuseOther,
 ];
 
 /** 海上國界虛線的最小顯示 zoom（低於此 zoom 只畫縣市界）。 */
@@ -148,24 +304,37 @@ const isLabelPoint: ExpressionSpecification = ['==', ['geometry-type'], 'Point']
 const isRailway: ExpressionSpecification = ['==', ['get', 'kind'], 'railway'];
 const isPath: ExpressionSpecification = ['in', ['get', 'class'], ['literal', PATH_CLASSES]];
 
-const textPaint = {
-  'text-color': PALETTE.label,
-  'text-halo-color': PALETTE.labelHalo,
-  'text-halo-width': 1.5,
-} as const;
-
 type GroupedLayer = { group: LayerGroupId | null; layer: LayerSpecification };
 
-/** All style layers in draw order, each tagged with its toggle group (null = always on). */
-const LAYERS: GroupedLayer[] = [
+/**
+ * Builds all style layers in draw order, each tagged with its toggle group (null = always on).
+ *
+ * Layer ids, filters and draw order are identical for every theme, so `setStyle` with
+ * `diff: true` only updates paint properties when the theme changes.
+ *
+ * Args:
+ *   theme: Theme whose palette and POI images are used.
+ *
+ * Returns:
+ *   Grouped layers; 3D buildings start hidden.
+ */
+function buildLayers(theme: ThemeId): GroupedLayer[] {
+  const p = paletteOf(theme);
+  const textPaint = {
+    'text-color': p.label,
+    'text-halo-color': p.labelHalo,
+    'text-halo-width': 1.5,
+  } as const;
+
+  return [
   // 底圖：背景是海，陸地面蓋在上面；兩者不提供開關
-  { group: null, layer: { id: 'background', type: 'background', paint: { 'background-color': PALETTE.sea } } },
+  { group: null, layer: { id: 'background', type: 'background', paint: { 'background-color': p.sea } } },
   {
     group: null,
     layer: {
       id: 'land-fill', type: 'fill', source: SOURCE_ID, 'source-layer': 'land',
       // 關閉 antialias：land 已切塊，開啟時塊與塊之間會出現細縫
-      paint: { 'fill-color': PALETTE.land, 'fill-antialias': false },
+      paint: { 'fill-color': p.land, 'fill-antialias': false },
     },
   },
 
@@ -174,14 +343,14 @@ const LAYERS: GroupedLayer[] = [
     group: 'landuse',
     layer: {
       id: 'landuse-fill', type: 'fill', source: SOURCE_ID, 'source-layer': 'landuse',
-      paint: { 'fill-color': landuseColor, 'fill-opacity': 0.9 },
+      paint: { 'fill-color': landuseColor(p), 'fill-opacity': 0.9 },
     },
   },
   {
     group: 'water',
     layer: {
       id: 'water-fill', type: 'fill', source: SOURCE_ID, 'source-layer': 'water',
-      paint: { 'fill-color': PALETTE.water },
+      paint: { 'fill-color': p.water },
     },
   },
   {
@@ -190,7 +359,7 @@ const LAYERS: GroupedLayer[] = [
       id: 'waterways-line', type: 'line', source: SOURCE_ID, 'source-layer': 'waterways',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': PALETTE.waterLine,
+        'line-color': p.waterLine,
         'line-width': ['interpolate', ['linear'], ['zoom'],
           8, ['match', ['get', 'class'], 'river', 0.8, 0.3],
           14, ['match', ['get', 'class'], 'river', 4, 'canal', 2.5, 1.2]],
@@ -206,8 +375,8 @@ const LAYERS: GroupedLayer[] = [
       id: 'buildings-fill', type: 'fill', source: SOURCE_ID, 'source-layer': 'buildings', minzoom: 13,
       filter: ['!=', ['get', 'is_part'], true],
       paint: {
-        'fill-color': PALETTE.building,
-        'fill-outline-color': PALETTE.buildingOutline,
+        'fill-color': p.building,
+        'fill-outline-color': p.buildingOutline,
         'fill-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0.4, 15, 1],
       },
     },
@@ -219,7 +388,7 @@ const LAYERS: GroupedLayer[] = [
     layer: {
       id: 'boundaries-village', type: 'line', source: SOURCE_ID, 'source-layer': 'boundaries', minzoom: 12,
       filter: ['==', ['get', 'admin_level'], 9],
-      paint: { 'line-color': PALETTE.boundaryVillage, 'line-width': 0.6, 'line-dasharray': [2, 2] },
+      paint: { 'line-color': p.boundaryVillage, 'line-width': 0.6, 'line-dasharray': [2, 2] },
     },
   },
   {
@@ -227,7 +396,7 @@ const LAYERS: GroupedLayer[] = [
     layer: {
       id: 'boundaries-town', type: 'line', source: SOURCE_ID, 'source-layer': 'boundaries', minzoom: 9,
       filter: ['in', ['get', 'admin_level'], ['literal', [7, 8]]],
-      paint: { 'line-color': PALETTE.boundaryTown, 'line-width': 0.9, 'line-dasharray': [3, 2] },
+      paint: { 'line-color': p.boundaryTown, 'line-width': 0.9, 'line-dasharray': [3, 2] },
     },
   },
   {
@@ -239,7 +408,7 @@ const LAYERS: GroupedLayer[] = [
       minzoom: COUNTRY_BOUNDARY_MINZOOM,
       filter: ['==', ['get', 'admin_level'], 2],
       paint: {
-        'line-color': PALETTE.boundaryCounty,
+        'line-color': p.boundaryCounty,
         'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.2, 12, 2],
         'line-dasharray': [4, 2],
       },
@@ -251,7 +420,7 @@ const LAYERS: GroupedLayer[] = [
       id: 'boundaries-county', type: 'line', source: SOURCE_ID, 'source-layer': 'boundaries',
       filter: ['==', ['get', 'admin_level'], 4],
       paint: {
-        'line-color': PALETTE.boundaryCounty,
+        'line-color': p.boundaryCounty,
         'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.8, 12, 2],
         'line-dasharray': [4, 2],
       },
@@ -264,7 +433,7 @@ const LAYERS: GroupedLayer[] = [
     layer: {
       id: 'roads-path', type: 'line', source: SOURCE_ID, 'source-layer': 'roads', minzoom: 14,
       filter: ['all', isHighway, isPath],
-      paint: { 'line-color': PALETTE.path, 'line-width': 1, 'line-dasharray': [2, 1.5] },
+      paint: { 'line-color': p.path, 'line-width': 1, 'line-dasharray': [2, 1.5] },
     },
   },
   {
@@ -274,7 +443,7 @@ const LAYERS: GroupedLayer[] = [
       id: 'roads-casing', type: 'line', source: SOURCE_ID, 'source-layer': 'roads', minzoom: 12,
       filter: ['all', isHighway, ['!', isPath]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': PALETTE.roadCasing, 'line-width': roadWidth(1.5) },
+      paint: { 'line-color': p.roadCasing, 'line-width': roadWidth(1.5) },
     },
   },
   {
@@ -283,7 +452,7 @@ const LAYERS: GroupedLayer[] = [
       id: 'roads-minor', type: 'line', source: SOURCE_ID, 'source-layer': 'roads',
       filter: ['all', isHighway, ['!', isPath], ['!', ['in', ['get', 'class'], ['literal', MAJOR_ROADS]]]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': roadColor, 'line-width': roadWidth(0) },
+      paint: { 'line-color': roadColor(p), 'line-width': roadWidth(0) },
     },
   },
   {
@@ -293,7 +462,7 @@ const LAYERS: GroupedLayer[] = [
       id: 'roads-major', type: 'line', source: SOURCE_ID, 'source-layer': 'roads',
       filter: ['all', isHighway, ['in', ['get', 'class'], ['literal', MAJOR_ROADS]]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': roadColor, 'line-width': roadWidth(0) },
+      paint: { 'line-color': roadColor(p), 'line-width': roadWidth(0) },
     },
   },
 
@@ -305,7 +474,7 @@ const LAYERS: GroupedLayer[] = [
       id: 'railways-line', type: 'line', source: SOURCE_ID, 'source-layer': 'roads',
       filter: isRailway,
       paint: {
-        'line-color': PALETTE.rail,
+        'line-color': p.rail,
         'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1, 14, 2.5],
       },
     },
@@ -313,11 +482,11 @@ const LAYERS: GroupedLayer[] = [
   {
     group: 'railways',
     layer: {
-      // 白色外框：路線色（如環狀線黃、淡海輕軌粉）壓在淺色底圖上仍清楚
+      // 外框（淺色主題為白）：路線色（如環狀線黃、淡海輕軌粉）壓在底圖上仍清楚
       id: 'transit-casing', type: 'line', source: SOURCE_ID, 'source-layer': 'transit',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': '#ffffff',
+        'line-color': p.transitCasing,
         'line-width': ['interpolate', ['linear'], ['zoom'], 7, 2, 10, 3.5, 14, 6.5, 18, 12],
       },
     },
@@ -329,7 +498,7 @@ const LAYERS: GroupedLayer[] = [
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         // OSM colour 可能是 #rrggbb 或 CSS 色名（orange、green）；無法解析時退回預設捷運藍
-        'line-color': ['to-color', ['coalesce', ['get', 'colour'], PALETTE.subway], PALETTE.subway],
+        'line-color': ['to-color', ['coalesce', ['get', 'colour'], p.subway], p.subway],
         'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1, 10, 2, 14, 4, 18, 8],
       },
     },
@@ -349,10 +518,10 @@ const LAYERS: GroupedLayer[] = [
       paint: {
         'fill-extrusion-color': [
           'interpolate', ['linear'], ['coalesce', ['get', 'render_height'], DEFAULT_BUILDING_HEIGHT_M],
-          0, PALETTE.building3dLow,
-          30, PALETTE.building3dMid,
-          100, PALETTE.building3dHigh,
-          300, PALETTE.building3dTop,
+          0, p.building3dLow,
+          30, p.building3dMid,
+          100, p.building3dHigh,
+          300, p.building3dTop,
         ],
         'fill-extrusion-height': ['coalesce', ['get', 'render_height'], DEFAULT_BUILDING_HEIGHT_M],
         'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
@@ -374,9 +543,9 @@ const LAYERS: GroupedLayer[] = [
       layout: {
         'icon-image': [
           'case',
-          ['in', ['get', 'class'], ['literal', ['railway', 'public_transport']]], 'poi-transit',
-          ['<=', ['get', 'minzoom'], 14], 'poi-major',
-          'poi-default',
+          ['in', ['get', 'class'], ['literal', ['railway', 'public_transport']]], poiIconId('transit', theme),
+          ['<=', ['get', 'minzoom'], 14], poiIconId('major', theme),
+          poiIconId('default', theme),
         ],
         // 碰撞時保留 sort key 小的：minzoom 小 = 越重要
         'symbol-sort-key': ['get', 'minzoom'],
@@ -390,7 +559,7 @@ const LAYERS: GroupedLayer[] = [
         // 名稱放不下時仍顯示點，不讓整個 POI 消失
         'text-optional': true,
       },
-      paint: { ...textPaint, 'text-color': PALETTE.poi },
+      paint: { ...textPaint, 'text-color': p.poi },
     },
   },
 
@@ -425,10 +594,14 @@ const LAYERS: GroupedLayer[] = [
       id: 'label-counties', type: 'symbol', source: SOURCE_ID, 'source-layer': 'boundaries', minzoom: 6, maxzoom: 10,
       filter: ['all', isLabelPoint, ['==', ['get', 'admin_level'], 4]],
       layout: { 'text-field': ['get', 'name'], 'text-font': FONT, 'text-size': 14 },
-      paint: { ...textPaint, 'text-color': PALETTE.boundaryCounty },
+      paint: { ...textPaint, 'text-color': p.boundaryCounty },
     },
   },
-];
+  ];
+}
+
+/** Layer structure (ids, groups, order) is theme-independent; derive it once from the default theme. */
+const LAYERS: readonly GroupedLayer[] = buildLayers(DEFAULT_THEME);
 
 /**
  * Returns the Martin composite TileJSON URL that serves every source layer in one tile.
@@ -443,24 +616,42 @@ export function compositeTileJsonUrl(martinUrl: string): string {
   return `${martinUrl}/${SOURCE_LAYERS.join(',')}`;
 }
 
+/** Runtime choices baked into the style. */
+export interface StyleOptions {
+  theme?: ThemeId;
+  hiddenGroups?: ReadonlySet<LayerGroupId>;
+  /** LOD1 3D building mode. */
+  threeD?: boolean;
+}
+
 /**
  * Builds the complete MapLibre style for the Taiwan vector tiles.
  *
+ * Theme and layer visibility are part of the style (instead of being patched onto
+ * the map afterwards), so a single `setStyle(style, { diff: true })` applies any
+ * combination of changes without the theme switch resetting visibility.
+ *
  * Args:
  *   martinUrl: Validated Martin base URL without trailing slash.
+ *   options: Theme, hidden layer groups and 3D mode; defaults to the default theme, all groups on, 2D.
  *
  * Returns:
  *   A MapLibre style specification (v8).
  */
-export function buildStyle(martinUrl: string): StyleSpecification {
+export function buildStyle(martinUrl: string, options: StyleOptions = {}): StyleSpecification {
+  const { theme = DEFAULT_THEME, hiddenGroups = new Set<LayerGroupId>(), threeD = false } = options;
+  const visibility = layerVisibility(hiddenGroups, threeD);
   return {
     version: 8,
-    name: 'Taiwan OSM',
+    name: `Taiwan OSM (${theme})`,
     glyphs: GLYPHS_URL,
     sources: {
       [SOURCE_ID]: { type: 'vector', url: compositeTileJsonUrl(martinUrl) },
     },
-    layers: LAYERS.map((l) => l.layer),
+    layers: buildLayers(theme).map(({ layer }) => {
+      const v = visibility[layer.id];
+      return v === undefined ? layer : ({ ...layer, layout: { ...layer.layout, visibility: v } } as LayerSpecification);
+    }),
   };
 }
 

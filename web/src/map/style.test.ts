@@ -4,13 +4,18 @@ import {
   BUILDINGS_3D_LAYER_ID,
   COUNTRY_BOUNDARY_MINZOOM,
   buildStyle,
+  DEFAULT_THEME,
+  isThemeId,
   layerVisibility,
   compositeTileJsonUrl,
   INTERACTIVE_LAYER_IDS,
   LAYER_GROUPS,
   layerIdsOf,
   PALETTE,
+  paletteOf,
+  POI_ICONS,
   SOURCE_LAYERS,
+  THEMES,
 } from './style';
 
 const style = buildStyle('http://localhost:3000');
@@ -151,12 +156,66 @@ describe('POI layer', () => {
     expect(poi?.type).toBe('symbol');
   });
 
-  it('only references icons that icons.ts can generate', async () => {
-    const { POI_ICONS } = await import('./icons');
-    const iconExpr = JSON.stringify(poi?.type === 'symbol' ? poi.layout?.['icon-image'] : null);
-    const referenced = [...iconExpr.matchAll(/"(poi-[a-z]+)"/g)].map((m) => m[1]);
-    expect(referenced.length).toBeGreaterThan(0);
-    for (const id of referenced) expect(Object.keys(POI_ICONS)).toContain(id);
+  it.each(THEMES.map((t) => t.id))('%s theme only references icons MapView can generate', (theme) => {
+    const themed = buildStyle('http://localhost:3000', { theme }).layers.find((l) => l.id === 'pois-symbol');
+    const iconExpr = JSON.stringify(themed?.type === 'symbol' ? themed.layout?.['icon-image'] : null);
+    const referenced = [...iconExpr.matchAll(/"(poi-[a-z]+-[a-z]+)"/g)].map((m) => m[1]);
+    expect(referenced).toHaveLength(3);
+    for (const id of referenced) {
+      expect(Object.keys(POI_ICONS)).toContain(id);
+      expect(id).toMatch(new RegExp(`-${theme}$`));
+    }
+  });
+});
+
+describe('themes', () => {
+  const ids = (s: ReturnType<typeof buildStyle>): string[] => s.layers.map((l) => l.id);
+
+  it.each(THEMES.map((t) => t.id))('%s passes MapLibre style-spec validation', (theme) => {
+    const errors = validateStyleMin(buildStyle('http://localhost:3000', { theme }));
+    expect(errors.map((e) => e.message)).toEqual([]);
+  });
+
+  it('keeps identical layer ids and order so setStyle diff only touches paint', () => {
+    for (const t of THEMES) {
+      expect(ids(buildStyle('http://localhost:3000', { theme: t.id }))).toEqual(ids(style));
+    }
+  });
+
+  it('paints the background with the theme sea colour', () => {
+    for (const t of THEMES) {
+      const [background] = buildStyle('http://localhost:3000', { theme: t.id }).layers;
+      expect(background?.type === 'background' ? background.paint?.['background-color'] : null).toBe(t.palette.sea);
+    }
+  });
+
+  it('defaults to the default theme', () => {
+    expect(DEFAULT_THEME).toBe('default');
+    expect(paletteOf(DEFAULT_THEME)).toBe(PALETTE);
+  });
+
+  it('validates untrusted theme ids', () => {
+    expect(isThemeId('dark')).toBe(true);
+    expect(isThemeId('neon')).toBe(false);
+    expect(isThemeId(null)).toBe(false);
+  });
+});
+
+describe('visibility baked into the style', () => {
+  const visibilityOf = (s: ReturnType<typeof buildStyle>, id: string): unknown =>
+    s.layers.find((l) => l.id === id)?.layout?.visibility;
+
+  it('hides layers of hidden groups and shows 3D buildings only in 3D mode', () => {
+    const s = buildStyle('http://localhost:3000', { theme: 'dark', hiddenGroups: new Set(['roads']), threeD: true });
+    expect(visibilityOf(s, 'roads-major')).toBe('none');
+    expect(visibilityOf(s, 'water-fill')).toBe('visible');
+    expect(visibilityOf(s, BUILDINGS_3D_LAYER_ID)).toBe('visible');
+  });
+
+  it('leaves the sea/land base layers without a visibility override', () => {
+    const s = buildStyle('http://localhost:3000', { hiddenGroups: new Set(['landuse']) });
+    expect(visibilityOf(s, 'background')).toBeUndefined();
+    expect(visibilityOf(s, 'land-fill')).toBeUndefined();
   });
 });
 

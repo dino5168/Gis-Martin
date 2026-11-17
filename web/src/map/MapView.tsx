@@ -2,8 +2,8 @@ import { Map as MapLibreMap, NavigationControl, ScaleControl, type MapMouseEvent
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { useEffect, useRef, useState } from 'react';
-import { createDotImage, POI_ICONS } from './icons';
-import { BUILDINGS_3D_MINZOOM, INTERACTIVE_LAYER_IDS, layerVisibility, type LayerGroupId } from './style';
+import { createDotImage } from './icons';
+import { BUILDINGS_3D_MINZOOM, INTERACTIVE_LAYER_IDS, POI_ICONS } from './style';
 
 /** Feature picked by a map click. */
 export interface SelectedFeature {
@@ -19,9 +19,9 @@ export interface ViewState {
 }
 
 interface MapViewProps {
+  /** Complete style including theme and layer visibility (see buildStyle). */
   style: StyleSpecification;
-  hiddenGroups: ReadonlySet<LayerGroupId>;
-  /** LOD1 3D building mode: shows extrusions and tilts the camera. */
+  /** LOD1 3D building mode: tilts the camera (extrusion visibility is part of `style`). */
   threeD: boolean;
   onSelect: (feature: SelectedFeature | null) => void;
   onViewChange: (view: ViewState) => void;
@@ -39,19 +39,24 @@ const BEARING_3D = -20;
 /**
  * MapLibre map bound to the Martin vector tiles.
  *
- * The map instance is created once; style changes are not expected at runtime,
- * and layer visibility is applied imperatively to avoid re-creating the WebGL context.
+ * The map instance is created once; later style changes (theme, layer toggles, 3D)
+ * are applied with `setStyle(style, { diff: true })`, which only patches changed
+ * properties and keeps the camera, loaded tiles and the WebGL context.
  *
  * Args:
- *   props: Style, hidden layer groups and event callbacks.
+ *   props: Style, 3D mode and event callbacks.
  *
  * Returns:
  *   The map container element.
  */
-export function MapView({ style, hiddenGroups, threeD, onSelect, onViewChange, onError }: MapViewProps) {
+export function MapView({ style, threeD, onSelect, onViewChange, onError }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // 建立地圖時取最新 style；之後的變更由下方 diff effect 套用
+  const styleRef = useRef(style);
+  styleRef.current = style;
+  const appliedStyleRef = useRef<StyleSpecification | null>(null);
 
   // 回呼放 ref：父元件每次 render 產生新函式時不必重建地圖
   const callbacks = useRef({ onSelect, onViewChange, onError });
@@ -63,7 +68,7 @@ export function MapView({ style, hiddenGroups, threeD, onSelect, onViewChange, o
 
     const map = new MapLibreMap({
       container,
-      style,
+      style: styleRef.current,
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
       maxBounds: MAX_BOUNDS,
@@ -73,6 +78,7 @@ export function MapView({ style, hiddenGroups, threeD, onSelect, onViewChange, o
       attributionControl: { compact: true, customAttribution: '© OpenStreetMap contributors' },
     });
     mapRef.current = map;
+    appliedStyleRef.current = styleRef.current;
     if (import.meta.env.DEV) {
       // 開發時方便在 DevTools 檢查：window.__map.areTilesLoaded() 等；production build 會移除
       (window as unknown as { __map?: MapLibreMap }).__map = map;
@@ -122,17 +128,19 @@ export function MapView({ style, hiddenGroups, threeD, onSelect, onViewChange, o
     return () => {
       map.remove();
       mapRef.current = null;
+      appliedStyleRef.current = null;
       setLoaded(false);
     };
-  }, [style]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !loaded) return;
-    for (const [id, visibility] of Object.entries(layerVisibility(hiddenGroups, threeD))) {
-      map.setLayoutProperty(id, 'visibility', visibility);
-    }
-  }, [hiddenGroups, threeD, loaded]);
+    if (!map || style === appliedStyleRef.current) return;
+    appliedStyleRef.current = style;
+    // 各主題圖層 id／順序相同 → diff 只會 setPaintProperty／setLayoutProperty；
+    // 若 diff 無法套用（例如 source 網址改變），MapLibre 會自動退回完整重載
+    map.setStyle(style, { diff: true });
+  }, [style]);
 
   // 切換 3D 時調整相機：開啟時傾斜並確保至少在 3D 建物出現的 zoom；關閉時回正
   useEffect(() => {
