@@ -159,7 +159,7 @@ describe('POI layer', () => {
   it.each(THEMES.map((t) => t.id))('%s theme only references icons MapView can generate', (theme) => {
     const themed = buildStyle('http://localhost:3000', { theme }).layers.find((l) => l.id === 'pois-symbol');
     const iconExpr = JSON.stringify(themed?.type === 'symbol' ? themed.layout?.['icon-image'] : null);
-    const referenced = [...iconExpr.matchAll(/"(poi-[a-z]+-[a-z]+)"/g)].map((m) => m[1]);
+    const referenced = [...iconExpr.matchAll(/"(poi-[a-z]+-[a-z-]+)"/g)].map((m) => m[1]);
     expect(referenced).toHaveLength(3);
     for (const id of referenced) {
       expect(Object.keys(POI_ICONS)).toContain(id);

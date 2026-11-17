@@ -1,4 +1,4 @@
-import { THEMES, type ThemeId } from '../map/style';
+import { isThemeId, THEMES, type ThemeId } from '../map/style';
 
 interface StyleSwitcherProps {
   theme: ThemeId;
@@ -6,7 +6,10 @@ interface StyleSwitcherProps {
 }
 
 /**
- * Segmented control that switches the map colour theme.
+ * Drop-down list that switches the map colour theme.
+ *
+ * A native `<select>` keeps keyboard and screen-reader support for free and
+ * scales to any number of themes, unlike a segmented control.
  *
  * Args:
  *   props: Current theme and the change handler.
@@ -16,22 +19,23 @@ interface StyleSwitcherProps {
  */
 export function StyleSwitcher({ theme, onChange }: StyleSwitcherProps) {
   return (
-    <section className="panel view-mode" aria-label="地圖樣式">
-      <h2>地圖樣式</h2>
-      <div className="segmented" role="radiogroup" aria-label="地圖樣式">
-        {THEMES.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="radio"
-            aria-checked={theme === t.id}
-            className={theme === t.id ? 'active' : ''}
-            onClick={() => onChange(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+    <section className="panel view-mode">
+      <label className="style-select">
+        <span>地圖樣式</span>
+        <select
+          value={theme}
+          onChange={(e) => {
+            // DOM 值是字串；只接受 THEMES 內的 id
+            if (isThemeId(e.target.value)) onChange(e.target.value);
+          }}
+        >
+          {THEMES.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </label>
     </section>
   );
 }
