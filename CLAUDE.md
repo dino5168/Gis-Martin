@@ -23,12 +23,13 @@ OSM PBF ──osm2pgsql(flex)──▶ PostGIS (osm_taiwan, EPSG:4326)
 
 | 用途 | 路徑 |
 |---|---|
-| **原始碼（唯一真實來源）** | `D:\1-研發\3-Gis-Martin\`（`martin\*.sql`、`martin\config.yaml`、`martin\service\*.ps1`、`web\`） |
-| 執行用副本（純 ASCII 路徑） | `C:\gis\osm\`：`.env`、`taiwan.osm.pbf`、`taiwan.lua`、`martin\`（SQL/config 副本）、`land\`（海岸線 zip） |
+| **原始碼（唯一真實來源）** | `D:\1-研發\3-Gis-Martin\`（`osm2pgsql\taiwan.lua`、`martin\*.sql`、`martin\config.yaml`、`martin\service\*.ps1`、`web\`） |
+| 執行用副本（純 ASCII 路徑） | `C:\gis\osm\`：`.env`、`taiwan.osm.pbf`、`taiwan.lua`（副本）、`martin\`（SQL/config 副本）、`land\`（海岸線 zip） |
 | 工具 | `C:\Tools\osm2pgsql\`（2.3.1）、`C:\Tools\martin\`（1.16.1）、PostgreSQL 17.5 + PostGIS 3.6.2（`C:\Program Files\PostgreSQL\17`） |
 | Martin 服務 | `C:\Program Files\MartinTiles\`（WinSW 2.12.0 + martin.exe 副本 + 含密碼 XML）、日誌 `C:\ProgramData\MartinTiles\logs\` |
 
 **修改流程**：改 `D:\…\martin\` 的檔案 → `Copy-Item` 到 `C:\gis\osm\martin\` → `psql -f` → `Restart-Service MartinTiles`（需管理員，會跳 UAC）。不要直接改 `C:\gis\osm\martin\` 的副本。
+Lua 同理：改 `D:\…\osm2pgsql\taiwan.lua` → `Copy-Item` 到 `C:\gis\osm\taiwan.lua` → 重匯 → 重跑 01、02。
 
 ## 資料庫
 
