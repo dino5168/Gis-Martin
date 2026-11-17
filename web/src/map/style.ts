@@ -83,6 +83,7 @@ const DEFAULT_PALETTE = {
   subway: '#4f7fc7',
   poi: '#b5615a',
   poiTransit: '#4f7fc7',
+  poiTourism: '#16867f',
   label: '#3a3a3a',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -128,6 +129,7 @@ const BRIGHT_PALETTE: Palette = {
   subway: '#4f7fc7',
   poi: '#8c6d62',
   poiTransit: '#4f7fc7',
+  poiTourism: '#3a9d96',
   label: '#333333',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -165,6 +167,7 @@ const DARK_PALETTE: Palette = {
   subway: '#6f9be0',
   poi: '#e08a80',
   poiTransit: '#7ea6e0',
+  poiTourism: '#4fb8b0',
   label: '#e6e6e6',
   labelHalo: '#1d1f22',
   transitCasing: '#1d1f22',
@@ -203,6 +206,7 @@ const SMOOTH_PALETTE: Palette = {
   subway: '#7d9fd1',
   poi: '#9a8a84',
   poiTransit: '#7d9fd1',
+  poiTourism: '#7aa9a4',
   label: '#5a5a5a',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -241,6 +245,7 @@ const TONER_PALETTE: Palette = {
   subway: '#000000',
   poi: '#000000',
   poiTransit: '#000000',
+  poiTourism: '#000000',
   label: '#000000',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -279,6 +284,7 @@ const TONER_LITE_PALETTE: Palette = {
   subway: '#8a8a8a',
   poi: '#777777',
   poiTransit: '#777777',
+  poiTourism: '#777777',
   label: '#555555',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -356,6 +362,92 @@ export const POI_ICONS: Readonly<Record<string, { fill: string; diameter: number
     }),
   ),
 );
+
+/**
+ * Maki (CC0) glyph per `tourism` subclass; subclasses without an entry keep the plain dot.
+ * Several subclasses intentionally share a glyph (e.g. all lodging types).
+ */
+export const TOURISM_MAKI = {
+  information: 'information',
+  attraction: 'attraction',
+  viewpoint: 'viewpoint',
+  artwork: 'monument',
+  hotel: 'lodging',
+  motel: 'lodging',
+  hostel: 'lodging',
+  guest_house: 'home',
+  apartment: 'home',
+  camp_site: 'campsite',
+  camp_pitch: 'campsite',
+  museum: 'museum',
+  gallery: 'art-gallery',
+  picnic_site: 'picnic-site',
+  // Maki 沒有登山檢查點；三角形近似山徑標記
+  checkpoint: 'triangle',
+  alpine_hut: 'shelter',
+} as const satisfies Record<string, string>;
+export type MakiName = (typeof TOURISM_MAKI)[keyof typeof TOURISM_MAKI];
+
+/** Diameter (CSS px) of the coloured disc behind a Maki glyph; larger than the plain dots so the glyph is legible. */
+export const MAKI_ICON_DIAMETER = 18;
+
+/**
+ * Image id of a Maki POI icon for a theme (theme in the id for the same reason as poiIconId).
+ *
+ * Args:
+ *   maki: Maki glyph name.
+ *   theme: Theme id.
+ *
+ * Returns:
+ *   Image id such as `maki-lodging-dark`.
+ */
+export function makiIconId(maki: MakiName, theme: ThemeId): string {
+  return `maki-${maki}-${theme}`;
+}
+
+/** Every Maki image id the styles can request, mapped to its glyph and disc colour. */
+export const MAKI_ICONS: Readonly<Record<string, { maki: MakiName; fill: string; diameter: number }>> =
+  Object.fromEntries(
+    THEMES.flatMap((t) =>
+      [...new Set(Object.values(TOURISM_MAKI))].map((maki) => [
+        makiIconId(maki, t.id),
+        { maki, fill: t.palette.poiTourism, diameter: MAKI_ICON_DIAMETER },
+      ]),
+    ),
+  );
+
+/**
+ * Builds the `icon-image` expression for tourism POIs, grouping subclasses that share a glyph.
+ *
+ * Args:
+ *   theme: Theme id.
+ *   fallback: Expression used for tourism subclasses without a Maki glyph.
+ *
+ * Returns:
+ *   A `match` expression on `subclass`.
+ */
+function tourismIconImage(theme: ThemeId, fallback: ExpressionSpecification): ExpressionSpecification {
+  const bySubclass = new Map<MakiName, string[]>();
+  for (const [subclass, maki] of Object.entries(TOURISM_MAKI) as [string, MakiName][]) {
+    bySubclass.set(maki, [...(bySubclass.get(maki) ?? []), subclass]);
+  }
+  // match 至少要一組 label/output，第一組單獨取出以符合 style-spec 的 tuple 型別
+  const [first, ...rest] = [...bySubclass];
+  if (!first) return fallback;
+  return [
+    'match', ['get', 'subclass'],
+    first[1], makiIconId(first[0], theme),
+    ...rest.flatMap(([maki, subclasses]) => [subclasses, makiIconId(maki, theme)]),
+    fallback,
+  ];
+}
+
+/** True for features drawn with a Maki icon (used to push the label below the larger disc). */
+const hasMakiIcon: ExpressionSpecification = [
+  'all',
+  ['==', ['get', 'class'], 'tourism'],
+  ['in', ['get', 'subclass'], ['literal', Object.keys(TOURISM_MAKI)]],
+];
 
 const PATH_CLASSES = ['footway', 'path', 'cycleway', 'steps', 'bridleway'];
 const MAJOR_ROADS = ['motorway', 'trunk', 'primary', 'secondary'];
@@ -653,13 +745,15 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
     group: 'pois',
     layer: {
       // symbol 而非 circle：symbol 有碰撞偵測，密集處自動隱藏重疊的點，疏密隨螢幕自適應。
-      // 圖示由 MapView 在 styleimagemissing 時以 icons.ts 產生。
+      // 圖示由 MapView 在 styleimagemissing 時以 icons.ts 產生（圓點；觀光類為 Maki 圖示）。
       id: 'pois-symbol', type: 'symbol', source: SOURCE_ID, 'source-layer': 'pois',
       // minzoom 屬性 = 該 POI 最早出現的 zoom（tile_pois 輸出；z14 圖磚含 15/16 級供 overzoom）
       filter: ['<=', ['get', 'minzoom'], ['zoom']],
       layout: {
         'icon-image': [
           'case',
+          ['==', ['get', 'class'], 'tourism'],
+          tourismIconImage(theme, ['case', ['<=', ['get', 'minzoom'], 14], poiIconId('major', theme), poiIconId('default', theme)]),
           ['in', ['get', 'class'], ['literal', ['railway', 'public_transport']]], poiIconId('transit', theme),
           ['<=', ['get', 'minzoom'], 14], poiIconId('major', theme),
           poiIconId('default', theme),
@@ -670,7 +764,8 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
         'text-field': ['step', ['zoom'], '', 15, ['coalesce', ['get', 'name'], '']],
         'text-font': FONT,
         'text-size': 11,
-        'text-offset': [0, 0.8],
+        // Maki 圓底較大，名稱要再往下移才不壓到圖示
+        'text-offset': ['case', hasMakiIcon, ['literal', [0, 1.1]], ['literal', [0, 0.8]]],
         'text-anchor': 'top',
         'text-max-width': 8,
         // 名稱放不下時仍顯示點，不讓整個 POI 消失

@@ -5,6 +5,77 @@ export interface RgbaImage {
   data: Uint8Array;
 }
 
+/** Square coverage mask of a rasterised glyph (0 = empty, 255 = fully covered). */
+export interface GlyphMask {
+  size: number;
+  alpha: Uint8Array;
+}
+
+/** Glyph edge length relative to the disc diameter; leaves a margin inside the white ring. */
+export const GLYPH_SCALE = 0.6;
+
+/**
+ * Device pixel ratio used for every generated icon.
+ *
+ * Rounded so glyph masks rasterised at startup and discs drawn later share one pixel grid.
+ *
+ * Returns:
+ *   Integer pixel ratio ≥ 1.
+ */
+export function iconPixelRatio(): number {
+  return Math.max(1, Math.round(globalThis.devicePixelRatio ?? 1));
+}
+
+/**
+ * Glyph mask edge length in device pixels for a disc diameter.
+ *
+ * Args:
+ *   diameter: Disc diameter in CSS pixels.
+ *   pixelRatio: Device pixel ratio.
+ *
+ * Returns:
+ *   Edge length in device pixels.
+ */
+export function glyphPixelSize(diameter: number, pixelRatio: number): number {
+  return Math.round(diameter * GLYPH_SCALE * pixelRatio);
+}
+
+/**
+ * Draws a coloured disc (same as createDotImage) with a white glyph centred on it.
+ *
+ * Kept free of DOM APIs so it is unit-testable; only the glyph mask needs a canvas.
+ *
+ * Args:
+ *   diameter: Disc diameter in CSS pixels.
+ *   fill: Disc colour as `#rrggbb`.
+ *   glyph: Coverage mask rasterised at `glyphPixelSize(diameter, pixelRatio)`.
+ *   pixelRatio: Device pixel ratio the bitmap is rendered for.
+ *
+ * Returns:
+ *   RGBA bitmap of the same size as createDotImage would return.
+ */
+export function createIconImage(diameter: number, fill: string, glyph: GlyphMask, pixelRatio = 1): RgbaImage {
+  const img = createDotImage(diameter, fill, pixelRatio);
+  const offset = Math.floor((img.width - glyph.size) / 2);
+  for (let gy = 0; gy < glyph.size; gy++) {
+    for (let gx = 0; gx < glyph.size; gx++) {
+      const a = (glyph.alpha[gy * glyph.size + gx] ?? 0) / 255;
+      if (a === 0) continue;
+      const x = gx + offset;
+      const y = gy + offset;
+      if (x < 0 || y < 0 || x >= img.width || y >= img.height) continue;
+      const i = (y * img.width + x) * 4;
+      // 白色圖案以覆蓋率疊在圓底上（反鋸齒邊緣自然混色）
+      for (let c = 0; c < 3; c++) {
+        const base = img.data[i + c] ?? 0;
+        img.data[i + c] = Math.round(base + (255 - base) * a);
+      }
+      img.data[i + 3] = Math.max(img.data[i + 3] ?? 0, Math.round(255 * a));
+    }
+  }
+  return img;
+}
+
 /**
  * Parses `#rrggbb` into RGB components.
  *

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDotImage, parseHex } from './icons';
+import { createDotImage, createIconImage, glyphPixelSize, parseHex, type GlyphMask } from './icons';
 import { POI_ICONS, THEMES } from './style';
 
 const pixel = (img: ReturnType<typeof createDotImage>, x: number, y: number): number[] => {
@@ -41,6 +41,30 @@ describe('createDotImage', () => {
 
   it('scales with the device pixel ratio', () => {
     expect(createDotImage(12, '#000000', 2).width).toBe(26);
+  });
+});
+
+describe('createIconImage', () => {
+  // 18 px 圓、glyph 11 px；glyph 只有中央 3×3 有覆蓋
+  const size = glyphPixelSize(18, 1);
+  const alpha = new Uint8Array(size * size);
+  const c = Math.floor(size / 2);
+  for (let y = c - 1; y <= c + 1; y++) for (let x = c - 1; x <= c + 1; x++) alpha[y * size + x] = 255;
+  const glyph: GlyphMask = { size, alpha };
+  const img = createIconImage(18, '#16867f', glyph);
+  const mid = Math.floor(img.width / 2);
+
+  it('keeps the plain dot size so icons and dots share collision boxes logic', () => {
+    expect(size).toBe(11);
+    expect(img.width).toBe(createDotImage(18, '#16867f').width);
+  });
+
+  it('paints the glyph white over the disc', () => {
+    expect(pixel(img, mid, mid)).toEqual([255, 255, 255, 255]);
+  });
+
+  it('keeps the disc colour where the glyph is empty', () => {
+    expect(pixel(img, mid - 5, mid)).toEqual([0x16, 0x86, 0x7f, 255]);
   });
 });
 

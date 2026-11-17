@@ -2,8 +2,9 @@ import { Map as MapLibreMap, NavigationControl, ScaleControl, type MapMouseEvent
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { useEffect, useRef, useState } from 'react';
-import { createDotImage } from './icons';
-import { BUILDINGS_3D_MINZOOM, INTERACTIVE_LAYER_IDS, POI_ICONS } from './style';
+import { createDotImage, createIconImage, iconPixelRatio, type RgbaImage } from './icons';
+import { getMakiGlyph } from './makiGlyphs';
+import { BUILDINGS_3D_MINZOOM, INTERACTIVE_LAYER_IDS, MAKI_ICONS, POI_ICONS } from './style';
 
 /** Feature picked by a map click. */
 export interface SelectedFeature {
@@ -35,6 +36,30 @@ const MAX_BOUNDS: [[number, number], [number, number]] = [[114.5, 19.5], [124.5,
 // 3D 模式的相機：60° 傾斜可看出高度，又不至於讓遠方圖磚數暴增
 const PITCH_3D = 60;
 const BEARING_3D = -20;
+
+/**
+ * Draws a POI image requested by the style.
+ *
+ * Args:
+ *   id: Image id from `icon-image` (plain dot or Maki icon).
+ *
+ * Returns:
+ *   Bitmap and its pixel ratio, or null for ids this app does not generate.
+ */
+function createPoiImage(id: string): { data: RgbaImage; ratio: number } | null {
+  const ratio = iconPixelRatio();
+  const maki = MAKI_ICONS[id];
+  if (maki) {
+    const glyph = getMakiGlyph(maki.maki);
+    // 圖示載入失敗時退回同色圓點，不讓 POI 消失
+    const data = glyph
+      ? createIconImage(maki.diameter, maki.fill, glyph, ratio)
+      : createDotImage(maki.diameter, maki.fill, ratio);
+    return { data, ratio };
+  }
+  const dot = POI_ICONS[id];
+  return dot ? { data: createDotImage(dot.diameter, dot.fill, ratio), ratio } : null;
+}
 
 /**
  * MapLibre map bound to the Martin vector tiles.
@@ -106,10 +131,9 @@ export function MapView({ style, threeD, onSelect, onViewChange, onError }: MapV
 
     // 樣式第一次用到圖示時才產生；以裝置像素比例繪製，高 DPI 螢幕才不會糊
     map.on('styleimagemissing', (e: { id: string }) => {
-      const icon = POI_ICONS[e.id];
-      if (!icon || map.hasImage(e.id)) return;
-      const ratio = Math.max(1, Math.round(window.devicePixelRatio));
-      map.addImage(e.id, createDotImage(icon.diameter, icon.fill, ratio), { pixelRatio: ratio });
+      if (map.hasImage(e.id)) return;
+      const image = createPoiImage(e.id);
+      if (image) map.addImage(e.id, image.data, { pixelRatio: image.ratio });
     });
 
     map.on('load', () => {

@@ -11,11 +11,14 @@ import {
   INTERACTIVE_LAYER_IDS,
   LAYER_GROUPS,
   layerIdsOf,
+  MAKI_ICONS,
+  makiIconId,
   PALETTE,
   paletteOf,
   POI_ICONS,
   SOURCE_LAYERS,
   THEMES,
+  TOURISM_MAKI,
 } from './style';
 
 const style = buildStyle('http://localhost:3000');
@@ -159,12 +162,43 @@ describe('POI layer', () => {
   it.each(THEMES.map((t) => t.id))('%s theme only references icons MapView can generate', (theme) => {
     const themed = buildStyle('http://localhost:3000', { theme }).layers.find((l) => l.id === 'pois-symbol');
     const iconExpr = JSON.stringify(themed?.type === 'symbol' ? themed.layout?.['icon-image'] : null);
-    const referenced = [...iconExpr.matchAll(/"(poi-[a-z]+-[a-z-]+)"/g)].map((m) => m[1]);
-    expect(referenced).toHaveLength(3);
+    const referenced = new Set([...iconExpr.matchAll(/"((?:poi|maki)-[a-z-]+)"/g)].map((m) => m[1] ?? ''));
+    const known = new Set([...Object.keys(POI_ICONS), ...Object.keys(MAKI_ICONS)]);
+    expect([...referenced].filter((id) => id.startsWith('poi-'))).toHaveLength(3);
     for (const id of referenced) {
-      expect(Object.keys(POI_ICONS)).toContain(id);
+      expect(known, id).toContain(id);
       expect(id).toMatch(new RegExp(`-${theme}$`));
     }
+  });
+});
+
+describe('tourism Maki icons', () => {
+  // Tasks/4-興趣點.md 列出的 tourism 子類別（筆數 ≥ 20）
+  const REQUIRED = [
+    'information', 'attraction', 'viewpoint', 'artwork', 'hotel', 'hostel', 'camp_site', 'guest_house',
+    'museum', 'checkpoint', 'picnic_site', 'motel', 'gallery', 'apartment', 'camp_pitch', 'alpine_hut',
+  ];
+
+  it('maps every listed tourism subclass to a Maki glyph', () => {
+    expect(Object.keys(TOURISM_MAKI).sort()).toEqual([...REQUIRED].sort());
+  });
+
+  it('defines one Maki image per glyph and theme, coloured with the theme tourism colour', () => {
+    const glyphs = new Set(Object.values(TOURISM_MAKI));
+    expect(Object.keys(MAKI_ICONS)).toHaveLength(glyphs.size * THEMES.length);
+    for (const t of THEMES) {
+      for (const g of glyphs) {
+        expect(MAKI_ICONS[makiIconId(g, t.id)]).toEqual({ maki: g, fill: t.palette.poiTourism, diameter: 18 });
+      }
+    }
+  });
+
+  it('routes tourism subclasses to Maki icons and others to the plain dots', () => {
+    const layer = buildStyle('http://localhost:3000', { theme: 'dark' }).layers.find((l) => l.id === 'pois-symbol');
+    const expr = JSON.stringify(layer?.type === 'symbol' ? layer.layout?.['icon-image'] : null);
+    expect(expr).toContain('"maki-lodging-dark"');
+    expect(expr).toContain('["hotel","motel","hostel"]');
+    expect(expr).toContain('"poi-transit-dark"');
   });
 });
 
