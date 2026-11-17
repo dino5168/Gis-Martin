@@ -1,0 +1,85 @@
+# Martin config：台灣 OSM 向量圖磚
+# 啟動：martin --config C:\gis\osm\martin\config.yaml
+# 連線字串由環境變數 MARTIN_DB_URL 提供（唯讀帳號 martin_reader），不寫死於此檔。
+# 不用 DATABASE_URL：Martin 1.16 會自動讀取該名稱並發出 deprecated 警告。
+
+# 開發階段只綁本機；要給區網/前端 container 存取時再改 0.0.0.0 並加反向代理
+listen_addresses: '127.0.0.1:3000'
+keep_alive: 75
+worker_processes: 8
+
+# Martin 1.16 cache 設定（舊版 cache_size_mb 已失效且會被靜默忽略）
+cache:
+  size_mb: 1024        # 總量；sprite/font/pmtiles 各自由此分配
+  tile_size_mb: 768    # 本專案只有 PostGIS tile，大部分給 tile cache
+
+# MapLibre 前端跨網域存取（Vite dev server 等）
+cors:
+  origin:
+    - http://localhost:5173
+    - http://localhost:3001
+
+postgres:
+  connection_string: '${MARTIN_DB_URL}'
+  pool_size: 20
+  # 只發佈下方明確宣告的 function；避免 osm2pgsql 原始表被自動公開
+  auto_publish: false
+
+  # zoom 分級在 function 內處理（minzoom 欄位），Martin 層一律 0–14；
+  # z15 以上由 MapLibre overzoom z14 圖磚
+  functions:
+    land:
+      schema: public
+      function: tile_land
+      minzoom: 0
+      maxzoom: 14
+      # 陸地底色要蓋滿前端 maxBounds 可見範圍（見 05_land.sql），比其他 source 大
+      bounds: [113.5, 18.5, 125.5, 28.5]
+    boundaries:
+      schema: public
+      function: tile_boundaries
+      minzoom: 0
+      maxzoom: 14
+      bounds: [116.5, 20.5, 122.5, 26.5]
+    landuse:
+      schema: public
+      function: tile_landuse
+      minzoom: 0
+      maxzoom: 14
+      bounds: [116.5, 20.5, 122.5, 26.5]
+    water:
+      schema: public
+      function: tile_water
+      minzoom: 0
+      maxzoom: 14
+      bounds: [116.5, 20.5, 122.5, 26.5]
+    waterways:
+      schema: public
+      function: tile_waterways
+      minzoom: 0
+      maxzoom: 14
+      bounds: [116.5, 20.5, 122.5, 26.5]
+    roads:
+      schema: public
+      function: tile_roads
+      minzoom: 0
+      maxzoom: 14
+      bounds: [116.5, 20.5, 122.5, 26.5]
+    transit:
+      schema: public
+      function: tile_transit
+      minzoom: 0
+      maxzoom: 14
+      bounds: [116.5, 20.5, 122.5, 26.5]
+    buildings:
+      schema: public
+      function: tile_buildings
+      minzoom: 0
+      maxzoom: 14
+      bounds: [116.5, 20.5, 122.5, 26.5]
+    pois:
+      schema: public
+      function: tile_pois
+      minzoom: 0
+      maxzoom: 14
+      bounds: [116.5, 20.5, 122.5, 26.5]

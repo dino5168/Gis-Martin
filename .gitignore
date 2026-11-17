@@ -1,0 +1,26 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Node / build
+node_modules/
+dist/
+*.log
+
+# OSM data / large binaries (live in C:\gis\osm\)
+*.osm.pbf
+*.zip
+*.shp
+*.shx
+*.dbf
+*.prj
+*.mbtiles
+*.pmtiles
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
