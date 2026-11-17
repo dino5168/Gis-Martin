@@ -18,6 +18,7 @@ cors:
   origin:
     - http://localhost:5173
     - http://localhost:3001
+    - https://gis-martin.pages.dev   # Cloudflare Pages 正式前端
 
 postgres:
   connection_string: '${MARTIN_DB_URL}'
