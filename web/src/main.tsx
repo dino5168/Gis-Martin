@@ -12,7 +12,7 @@ if (!rootElement) {
   throw new Error('#root element not found in index.html');
 }
 
-const config = parseConfig(import.meta.env);
+const config = parseConfig(import.meta.env, import.meta.env.PROD);
 
 createRoot(rootElement).render(
   <StrictMode>

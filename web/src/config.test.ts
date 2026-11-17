@@ -25,4 +25,15 @@ describe('parseConfig', () => {
     expect(result.data).toBeNull();
     expect(result.error).toBeInstanceOf(Error);
   });
+
+  it('rejects http in production', () => {
+    const result = parseConfig({ VITE_MARTIN_URL: 'http://tiles.example.com' }, true);
+    expect(result.data).toBeNull();
+    expect(result.error?.message).toContain('https');
+  });
+
+  it('accepts https in production', () => {
+    const result = parseConfig({ VITE_MARTIN_URL: 'https://tiles.example.com' }, true);
+    expect(result.data?.martinUrl).toBe('https://tiles.example.com');
+  });
 });

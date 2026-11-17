@@ -14,11 +14,15 @@ export interface AppConfig {
  *
  * Args:
  *   env: Key/value map, normally `import.meta.env`.
+ *   isProd: True for production builds (`import.meta.env.PROD`); http is then rejected.
  *
  * Returns:
  *   Validated AppConfig, or an error describing the invalid variable.
  */
-export function parseConfig(env: Readonly<Record<string, string | undefined>>): Result<AppConfig> {
+export function parseConfig(
+  env: Readonly<Record<string, string | undefined>>,
+  isProd = false,
+): Result<AppConfig> {
   const raw = env.VITE_MARTIN_URL?.trim();
   if (!raw) {
     return err('VITE_MARTIN_URL 未設定（請複製 .env.example 為 .env.local）');
@@ -33,6 +37,10 @@ export function parseConfig(env: Readonly<Record<string, string | undefined>>): 
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return err(`VITE_MARTIN_URL 只接受 http/https：${raw}`);
+  }
+  // 正式站是 https（Cloudflare Pages），http 圖磚會被當 mixed content 擋掉且錯誤不明顯
+  if (isProd && url.protocol === 'http:') {
+    return err(`正式環境 VITE_MARTIN_URL 必須是 https：${raw}`);
   }
   // Martin source 路徑會直接接在後面，query/hash 會產生錯誤的 tile URL
   if (url.search || url.hash) {
