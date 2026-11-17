@@ -10,7 +10,12 @@
 ### 2026-11-17 收工狀態（下次接續）
 
 - 最新 commit：`5d25ab2`（公車路線下拉選單）；Pages 部署成功
-- quick tunnel `https://sugar-constant-gif-water.trycloudflare.com` 跑在本次 Claude Code session 背景，**session 結束即失效** → 正式站地圖會空白（公車動態不受影響，因為直接連 Data.Taipei）。重開：`cloudflared tunnel --url http://127.0.0.1:3000` → 把新網址填到 Pages 環境變數 `VITE_MARTIN_URL` → 重新部署
+- quick tunnel 改由 **Windows 排程工作 `GisMartin-QuickTunnel`** 執行（2026-11-17 17:55 起，**72 小時後自動停止**，約 2026-11-20 17:55）：`conhost --headless cloudflared tunnel --no-autoupdate --url http://127.0.0.1:3000`，日誌 `C:\gis\osm\logs\quicktunnel.log`，不受 Claude Code session 影響
+  - 目前網址 `https://exterior-citizens-occasional-switching.trycloudflare.com`（已填入 Pages `VITE_MARTIN_URL` 並重新部署）
+  - 以「使用者登入時」執行（S4U 需管理員）：**登出、重開機（含 Windows Update）就會停**；未設失敗自動重啟，因為重啟會換網址
+  - 重啟步驟：`Start-ScheduledTask GisMartin-QuickTunnel` → 從日誌取新網址（`Select-String C:\gis\osm\logs\quicktunnel.log 'trycloudflare.com' | Select -Last 1`）→ Pages 設定改 `VITE_MARTIN_URL` → 部署頁「重試部署」
+  - 停止／移除：`Stop-ScheduledTask GisMartin-QuickTunnel`；`Unregister-ScheduledTask GisMartin-QuickTunnel -Confirm:$false`
+  - 停止後正式站底圖會空白（公車動態不受影響，因為直接連 Data.Taipei）
 - 起始畫面：三峽 121.37621, 24.93873, z16（`MapView.tsx` 的 `INITIAL_CENTER`）
 
 ## 下次進來先做
