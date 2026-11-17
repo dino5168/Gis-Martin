@@ -84,6 +84,13 @@ const DEFAULT_PALETTE = {
   poi: '#b5615a',
   poiTransit: '#4f7fc7',
   poiTourism: '#16867f',
+  poiFood: '#e07b28',
+  poiShop: '#8c5bb8',
+  poiHealth: '#d64545',
+  poiCivic: '#7a6a58',
+  poiLeisure: '#4c9a3f',
+  poiHistoric: '#a5823b',
+  poiOffice: '#6b7a8f',
   label: '#3a3a3a',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -130,6 +137,13 @@ const BRIGHT_PALETTE: Palette = {
   poi: '#8c6d62',
   poiTransit: '#4f7fc7',
   poiTourism: '#3a9d96',
+  poiFood: '#e88a3c',
+  poiShop: '#9a6cc4',
+  poiHealth: '#e05a5a',
+  poiCivic: '#8a7a68',
+  poiLeisure: '#5aa84c',
+  poiHistoric: '#b08e47',
+  poiOffice: '#7a889c',
   label: '#333333',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -168,6 +182,13 @@ const DARK_PALETTE: Palette = {
   poi: '#e08a80',
   poiTransit: '#7ea6e0',
   poiTourism: '#4fb8b0',
+  poiFood: '#f29a4a',
+  poiShop: '#b48ce0',
+  poiHealth: '#f07070',
+  poiCivic: '#b8a690',
+  poiLeisure: '#78c46a',
+  poiHistoric: '#d4b060',
+  poiOffice: '#9aabc2',
   label: '#e6e6e6',
   labelHalo: '#1d1f22',
   transitCasing: '#1d1f22',
@@ -207,6 +228,13 @@ const SMOOTH_PALETTE: Palette = {
   poi: '#9a8a84',
   poiTransit: '#7d9fd1',
   poiTourism: '#7aa9a4',
+  poiFood: '#d9a066',
+  poiShop: '#a990c4',
+  poiHealth: '#d98282',
+  poiCivic: '#a39686',
+  poiLeisure: '#8fb886',
+  poiHistoric: '#c2aa7a',
+  poiOffice: '#98a3b2',
   label: '#5a5a5a',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -246,6 +274,13 @@ const TONER_PALETTE: Palette = {
   poi: '#000000',
   poiTransit: '#000000',
   poiTourism: '#000000',
+  poiFood: '#000000',
+  poiShop: '#000000',
+  poiHealth: '#000000',
+  poiCivic: '#000000',
+  poiLeisure: '#000000',
+  poiHistoric: '#000000',
+  poiOffice: '#000000',
   label: '#000000',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -285,6 +320,13 @@ const TONER_LITE_PALETTE: Palette = {
   poi: '#777777',
   poiTransit: '#777777',
   poiTourism: '#777777',
+  poiFood: '#777777',
+  poiShop: '#777777',
+  poiHealth: '#777777',
+  poiCivic: '#777777',
+  poiLeisure: '#777777',
+  poiHistoric: '#777777',
+  poiOffice: '#777777',
   label: '#555555',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -363,90 +405,362 @@ export const POI_ICONS: Readonly<Record<string, { fill: string; diameter: number
   ),
 );
 
+/** Semantic POI groups; each group has its own disc colour per theme (a class like `amenity` spans several groups). */
+export type PoiGroup = 'food' | 'shop' | 'health' | 'transport' | 'civic' | 'leisure' | 'tourism' | 'historic' | 'office';
+
+/** Palette colour of each POI group's icon disc. */
+export const POI_GROUP_COLOR = {
+  food: 'poiFood',
+  shop: 'poiShop',
+  health: 'poiHealth',
+  transport: 'poiTransit',
+  civic: 'poiCivic',
+  leisure: 'poiLeisure',
+  tourism: 'poiTourism',
+  historic: 'poiHistoric',
+  office: 'poiOffice',
+} as const satisfies Record<PoiGroup, keyof Palette>;
+
+/** Display names of the POI groups (legend / docs). */
+export const POI_GROUP_LABELS: Readonly<Record<PoiGroup, string>> = {
+  food: '餐飲',
+  shop: '購物',
+  health: '醫療',
+  transport: '交通',
+  civic: '公共／教育',
+  leisure: '休閒娛樂',
+  tourism: '觀光',
+  historic: '古蹟',
+  office: '辦公／金融',
+};
+
 /**
- * Maki (CC0) glyph per `tourism` subclass; subclasses without an entry keep the plain dot.
- * Several subclasses intentionally share a glyph (e.g. all lodging types).
+ * Maki (CC0) glyph and group per `class/subclass`.
+ *
+ * Only subclasses that are actually drawn (non-null `minzoom` in 01_post_import.sql) are listed;
+ * several subclasses intentionally share a glyph. Subclasses missing here fall back to
+ * POI_CLASS_MAKI, then to the plain dots.
  */
-export const TOURISM_MAKI = {
-  information: 'information',
-  attraction: 'attraction',
-  viewpoint: 'viewpoint',
-  artwork: 'monument',
-  hotel: 'lodging',
-  motel: 'lodging',
-  hostel: 'lodging',
-  guest_house: 'home',
-  apartment: 'home',
-  camp_site: 'campsite',
-  camp_pitch: 'campsite',
-  museum: 'museum',
-  gallery: 'art-gallery',
-  picnic_site: 'picnic-site',
+export const POI_MAKI = {
+  // ---- 交通 ----
+  'railway/station': ['rail', 'transport'],
+  'railway/halt': ['rail', 'transport'],
+  'railway/tram_stop': ['rail-light', 'transport'],
+  'public_transport/station': ['rail-metro', 'transport'],
+  'public_transport/platform': ['bus', 'transport'],
+  'amenity/bus_station': ['bus', 'transport'],
+  'amenity/ferry_terminal': ['ferry', 'transport'],
+  'amenity/fuel': ['fuel', 'transport'],
+  'amenity/charging_station': ['charging-station', 'transport'],
+  'amenity/parking': ['parking', 'transport'],
+  'amenity/bicycle_rental': ['bicycle-share', 'transport'],
+  'amenity/bicycle_repair_station': ['bicycle', 'transport'],
+  'amenity/car_rental': ['car-rental', 'transport'],
+  'amenity/car_wash': ['car', 'transport'],
+  'amenity/motorcycle_rental': ['scooter', 'transport'],
+  'amenity/taxi': ['taxi', 'transport'],
+
+  // ---- 餐飲 ----
+  'amenity/restaurant': ['restaurant', 'food'],
+  'amenity/food_court': ['restaurant', 'food'],
+  'amenity/cafe': ['cafe', 'food'],
+  'amenity/fast_food': ['fast-food', 'food'],
+  'amenity/bar': ['bar', 'food'],
+  'amenity/pub': ['beer', 'food'],
+  'amenity/ice_cream': ['ice-cream', 'food'],
+
+  // ---- 醫療 ----
+  'amenity/hospital': ['hospital', 'health'],
+  'amenity/clinic': ['doctor', 'health'],
+  'amenity/doctors': ['doctor', 'health'],
+  'amenity/dentist': ['dentist', 'health'],
+  'amenity/pharmacy': ['pharmacy', 'health'],
+  'amenity/veterinary': ['veterinary', 'health'],
+  'amenity/nursing_home': ['residential-community', 'health'],
+
+  // ---- 公共／教育 ----
+  'amenity/school': ['school', 'civic'],
+  'amenity/kindergarten': ['school', 'civic'],
+  'amenity/childcare': ['school', 'civic'],
+  'amenity/prep_school': ['school', 'civic'],
+  'amenity/language_school': ['school', 'civic'],
+  'amenity/music_school': ['music', 'civic'],
+  'amenity/college': ['college', 'civic'],
+  'amenity/university': ['college', 'civic'],
+  'amenity/library': ['library', 'civic'],
+  'amenity/public_bookcase': ['library', 'civic'],
+  'amenity/townhall': ['town-hall', 'civic'],
+  // Maki 沒有法院；以公所（公家機關）圖示代表
+  'amenity/courthouse': ['town-hall', 'civic'],
+  'amenity/community_centre': ['residential-community', 'civic'],
+  'amenity/social_facility': ['residential-community', 'civic'],
+  'amenity/police': ['police', 'civic'],
+  'amenity/fire_station': ['fire-station', 'civic'],
+  'amenity/post_office': ['post', 'civic'],
+  'amenity/prison': ['prison', 'civic'],
+  'amenity/place_of_worship': ['place-of-worship', 'civic'],
+  'amenity/grave_yard': ['cemetery', 'civic'],
+  'amenity/toilets': ['toilet', 'civic'],
+
+  // ---- 休閒娛樂 ----
+  'amenity/cinema': ['cinema', 'leisure'],
+  'amenity/theatre': ['theatre', 'leisure'],
+  'amenity/arts_centre': ['theatre', 'leisure'],
+  'amenity/events_venue': ['theatre', 'leisure'],
+  'amenity/nightclub': ['nightclub', 'leisure'],
+  'amenity/karaoke_box': ['karaoke', 'leisure'],
+  'amenity/internet_cafe': ['gaming', 'leisure'],
+  'amenity/bbq': ['bbq', 'leisure'],
+  'amenity/fountain': ['water', 'leisure'],
+  'amenity/marketplace': ['grocery', 'food'],
+  'leisure/playground': ['playground', 'leisure'],
+  'leisure/picnic_table': ['picnic-site', 'leisure'],
+  'leisure/fitness_station': ['fitness-centre', 'leisure'],
+  'leisure/fitness_centre': ['fitness-centre', 'leisure'],
+  'leisure/pitch': ['pitch', 'leisure'],
+  'leisure/sports_centre': ['stadium', 'leisure'],
+  'leisure/stadium': ['stadium', 'leisure'],
+  'leisure/amusement_arcade': ['gaming', 'leisure'],
+  'leisure/park': ['park', 'leisure'],
+  'leisure/garden': ['garden', 'leisure'],
+  'leisure/swimming_pool': ['swimming', 'leisure'],
+  'leisure/slipway': ['slipway', 'leisure'],
+  'leisure/marina': ['harbor', 'leisure'],
+  'leisure/firepit': ['bbq', 'leisure'],
+
+  // ---- 觀光 ----
+  'tourism/information': ['information', 'tourism'],
+  'tourism/attraction': ['attraction', 'tourism'],
+  'tourism/viewpoint': ['viewpoint', 'tourism'],
+  'tourism/artwork': ['monument', 'tourism'],
+  'tourism/hotel': ['lodging', 'tourism'],
+  'tourism/motel': ['lodging', 'tourism'],
+  'tourism/hostel': ['lodging', 'tourism'],
+  'tourism/guest_house': ['home', 'tourism'],
+  'tourism/apartment': ['home', 'tourism'],
+  'tourism/camp_site': ['campsite', 'tourism'],
+  'tourism/camp_pitch': ['campsite', 'tourism'],
+  'tourism/museum': ['museum', 'tourism'],
+  'tourism/gallery': ['art-gallery', 'tourism'],
+  'tourism/picnic_site': ['picnic-site', 'tourism'],
   // Maki 沒有登山檢查點；三角形近似山徑標記
-  checkpoint: 'triangle',
-  alpine_hut: 'shelter',
-} as const satisfies Record<string, string>;
-export type MakiName = (typeof TOURISM_MAKI)[keyof typeof TOURISM_MAKI];
+  'tourism/checkpoint': ['triangle', 'tourism'],
+  'tourism/alpine_hut': ['shelter', 'tourism'],
+  'tourism/zoo': ['zoo', 'tourism'],
+  'tourism/aquarium': ['aquarium', 'tourism'],
+  'tourism/theme_park': ['amusement-park', 'tourism'],
+
+  // ---- 古蹟 ----
+  'historic/memorial': ['monument', 'historic'],
+  'historic/monument': ['monument', 'historic'],
+  'historic/wayside_shrine': ['place-of-worship', 'historic'],
+  'historic/tomb': ['cemetery', 'historic'],
+  'historic/aircraft': ['airfield', 'historic'],
+  'historic/castle': ['castle', 'historic'],
+  'historic/city_gate': ['castle', 'historic'],
+
+  // ---- 辦公／金融 ----
+  'amenity/bank': ['bank', 'office'],
+  'amenity/coworking_space': ['commercial', 'office'],
+  'office/government': ['town-hall', 'office'],
+  'office/estate_agent': ['home', 'office'],
+  'office/telecommunication': ['mobile-phone', 'office'],
+  'office/diplomatic': ['embassy', 'office'],
+  'office/religion': ['place-of-worship', 'office'],
+  'office/educational_institution': ['school', 'office'],
+  'office/university': ['college', 'office'],
+  'office/travel_agent': ['suitcase', 'office'],
+  'office/financial': ['bank', 'office'],
+  'office/insurance': ['bank', 'office'],
+
+  // ---- 購物（未列出的 shop 子類別用 POI_CLASS_MAKI 的購物袋）----
+  'shop/convenience': ['convenience', 'shop'],
+  'shop/supermarket': ['grocery', 'shop'],
+  'shop/greengrocer': ['grocery', 'shop'],
+  'shop/grocery': ['grocery', 'shop'],
+  'shop/food': ['grocery', 'shop'],
+  'shop/health_food': ['grocery', 'shop'],
+  'shop/deli': ['restaurant', 'shop'],
+  'shop/butcher': ['restaurant', 'shop'],
+  'shop/seafood': ['restaurant-seafood', 'shop'],
+  'shop/pasta': ['restaurant-noodle', 'shop'],
+  'shop/bakery': ['bakery', 'shop'],
+  'shop/pastry': ['bakery', 'shop'],
+  'shop/confectionery': ['confectionery', 'shop'],
+  'shop/beverages': ['teahouse', 'shop'],
+  'shop/tea': ['teahouse', 'shop'],
+  'shop/coffee': ['cafe', 'shop'],
+  'shop/alcohol': ['alcohol-shop', 'shop'],
+  'shop/wine': ['alcohol-shop', 'shop'],
+  'shop/clothes': ['clothing-store', 'shop'],
+  'shop/fabric': ['clothing-store', 'shop'],
+  'shop/tailor': ['clothing-store', 'shop'],
+  'shop/fashion_accessories': ['clothing-store', 'shop'],
+  'shop/shoes': ['shoe', 'shop'],
+  'shop/jewelry': ['jewelry-store', 'shop'],
+  'shop/watches': ['watch', 'shop'],
+  'shop/optician': ['optician', 'shop'],
+  'shop/hairdresser': ['hairdresser', 'shop'],
+  'shop/beauty': ['hairdresser', 'shop'],
+  'shop/chemist': ['pharmacy', 'shop'],
+  'shop/herbalist': ['pharmacy', 'shop'],
+  'shop/medical_supply': ['pharmacy', 'shop'],
+  'shop/laundry': ['laundry', 'shop'],
+  'shop/dry_cleaning': ['laundry', 'shop'],
+  'shop/books': ['library', 'shop'],
+  'shop/mobile_phone': ['mobile-phone', 'shop'],
+  'shop/telecommunication': ['mobile-phone', 'shop'],
+  'shop/hardware': ['hardware', 'shop'],
+  'shop/doityourself': ['hardware', 'shop'],
+  'shop/trade': ['hardware', 'shop'],
+  'shop/locksmith': ['hardware', 'shop'],
+  'shop/electrical': ['hardware', 'shop'],
+  'shop/doors': ['hardware', 'shop'],
+  'shop/repair': ['hardware', 'shop'],
+  'shop/paint': ['paint', 'shop'],
+  'shop/furniture': ['furniture', 'shop'],
+  'shop/bed': ['furniture', 'shop'],
+  'shop/kitchen': ['furniture', 'shop'],
+  'shop/interior_decoration': ['furniture', 'shop'],
+  'shop/curtain': ['furniture', 'shop'],
+  'shop/bathroom_furnishing': ['furniture', 'shop'],
+  'shop/lighting': ['furniture', 'shop'],
+  'shop/gift': ['gift', 'shop'],
+  'shop/florist': ['florist', 'shop'],
+  'shop/garden_centre': ['garden-centre', 'shop'],
+  'shop/farm': ['farm', 'shop'],
+  'shop/agrarian': ['farm', 'shop'],
+  'shop/car': ['car', 'shop'],
+  'shop/car_repair': ['car-repair', 'shop'],
+  'shop/car_parts': ['car-repair', 'shop'],
+  'shop/tyres': ['car-repair', 'shop'],
+  'shop/motorcycle': ['scooter', 'shop'],
+  'shop/motorcycle_repair': ['scooter', 'shop'],
+  'shop/bicycle': ['bicycle', 'shop'],
+  'shop/outdoor': ['campsite', 'shop'],
+  'shop/pet': ['dog-park', 'shop'],
+  'shop/pet_grooming': ['dog-park', 'shop'],
+  'shop/video_games': ['gaming', 'shop'],
+  'shop/games': ['gaming', 'shop'],
+  'shop/musical_instrument': ['music', 'shop'],
+  'shop/music': ['music', 'shop'],
+  'shop/hifi': ['music', 'shop'],
+  'shop/art': ['art-gallery', 'shop'],
+  'shop/craft': ['art-gallery', 'shop'],
+  'shop/religion': ['place-of-worship', 'shop'],
+  'shop/funeral_directors': ['cemetery', 'shop'],
+  'shop/travel_agency': ['suitcase', 'shop'],
+  'shop/gas': ['fuel', 'shop'],
+  'shop/water': ['drinking-water', 'shop'],
+  'shop/wholesale': ['warehouse', 'shop'],
+} as const satisfies Record<string, readonly [string, PoiGroup]>;
+
+/** Class-level fallback glyph for subclasses not in POI_MAKI (amenity/tourism/railway keep the plain dots). */
+export const POI_CLASS_MAKI = {
+  shop: ['shop', 'shop'],
+  office: ['commercial', 'office'],
+  historic: ['historic', 'historic'],
+  leisure: ['park', 'leisure'],
+} as const satisfies Record<string, readonly [string, PoiGroup]>;
+
+type MakiEntry = (typeof POI_MAKI)[keyof typeof POI_MAKI] | (typeof POI_CLASS_MAKI)[keyof typeof POI_CLASS_MAKI];
+export type MakiName = MakiEntry[0];
 
 /** Diameter (CSS px) of the coloured disc behind a Maki glyph; larger than the plain dots so the glyph is legible. */
 export const MAKI_ICON_DIAMETER = 18;
 
 /**
- * Image id of a Maki POI icon for a theme (theme in the id for the same reason as poiIconId).
+ * Image id of a Maki POI icon (theme in the id for the same reason as poiIconId; group because one glyph can
+ * appear in several groups with different colours).
  *
  * Args:
  *   maki: Maki glyph name.
+ *   group: POI group (selects the disc colour).
  *   theme: Theme id.
  *
  * Returns:
- *   Image id such as `maki-lodging-dark`.
+ *   Image id such as `maki-lodging-tourism-dark`.
  */
-export function makiIconId(maki: MakiName, theme: ThemeId): string {
-  return `maki-${maki}-${theme}`;
+export function makiIconId(maki: MakiName, group: PoiGroup, theme: ThemeId): string {
+  return `maki-${maki}-${group}-${theme}`;
 }
+
+const MAKI_ENTRIES: readonly (readonly [MakiName, PoiGroup])[] = [
+  ...Object.values(POI_MAKI),
+  ...Object.values(POI_CLASS_MAKI),
+];
 
 /** Every Maki image id the styles can request, mapped to its glyph and disc colour. */
 export const MAKI_ICONS: Readonly<Record<string, { maki: MakiName; fill: string; diameter: number }>> =
   Object.fromEntries(
     THEMES.flatMap((t) =>
-      [...new Set(Object.values(TOURISM_MAKI))].map((maki) => [
-        makiIconId(maki, t.id),
-        { maki, fill: t.palette.poiTourism, diameter: MAKI_ICON_DIAMETER },
+      MAKI_ENTRIES.map(([maki, group]) => [
+        makiIconId(maki, group, t.id),
+        { maki, fill: t.palette[POI_GROUP_COLOR[group]], diameter: MAKI_ICON_DIAMETER },
       ]),
     ),
   );
 
+/** `class/subclass` lookup key of a POI feature. */
+const poiKey: ExpressionSpecification = ['concat', ['get', 'class'], '/', ['coalesce', ['get', 'subclass'], '']];
+
 /**
- * Builds the `icon-image` expression for tourism POIs, grouping subclasses that share a glyph.
+ * Builds a `match` expression from `input` labels to image ids, merging labels that share an image.
  *
  * Args:
- *   theme: Theme id.
- *   fallback: Expression used for tourism subclasses without a Maki glyph.
+ *   input: Expression evaluated per feature.
+ *   pairs: Label and image id pairs.
+ *   fallback: Expression used when no label matches.
  *
  * Returns:
- *   A `match` expression on `subclass`.
+ *   A `match` expression, or `fallback` when `pairs` is empty.
  */
-function tourismIconImage(theme: ThemeId, fallback: ExpressionSpecification): ExpressionSpecification {
-  const bySubclass = new Map<MakiName, string[]>();
-  for (const [subclass, maki] of Object.entries(TOURISM_MAKI) as [string, MakiName][]) {
-    bySubclass.set(maki, [...(bySubclass.get(maki) ?? []), subclass]);
-  }
+function matchImages(
+  input: ExpressionSpecification,
+  pairs: readonly (readonly [string, string])[],
+  fallback: ExpressionSpecification,
+): ExpressionSpecification {
+  const byImage = new Map<string, string[]>();
+  for (const [label, image] of pairs) byImage.set(image, [...(byImage.get(image) ?? []), label]);
   // match 至少要一組 label/output，第一組單獨取出以符合 style-spec 的 tuple 型別
-  const [first, ...rest] = [...bySubclass];
+  const [first, ...rest] = [...byImage];
   if (!first) return fallback;
   return [
-    'match', ['get', 'subclass'],
-    first[1], makiIconId(first[0], theme),
-    ...rest.flatMap(([maki, subclasses]) => [subclasses, makiIconId(maki, theme)]),
+    'match', input,
+    first[1], first[0],
+    ...rest.flatMap(([image, labels]) => [labels, image]),
     fallback,
   ];
 }
 
+/**
+ * Builds the POI `icon-image` expression: subclass glyph → class glyph → plain dot.
+ *
+ * Args:
+ *   theme: Theme id.
+ *   dot: Plain-dot expression for POIs without a Maki glyph.
+ *
+ * Returns:
+ *   The `icon-image` expression.
+ */
+function poiIconImage(theme: ThemeId, dot: ExpressionSpecification): ExpressionSpecification {
+  const byClass = matchImages(
+    ['get', 'class'],
+    Object.entries(POI_CLASS_MAKI).map(([cls, [maki, group]]) => [cls, makiIconId(maki, group, theme)] as const),
+    dot,
+  );
+  return matchImages(
+    poiKey,
+    Object.entries(POI_MAKI).map(([key, [maki, group]]) => [key, makiIconId(maki, group, theme)] as const),
+    byClass,
+  );
+}
+
 /** True for features drawn with a Maki icon (used to push the label below the larger disc). */
 const hasMakiIcon: ExpressionSpecification = [
-  'all',
-  ['==', ['get', 'class'], 'tourism'],
-  ['in', ['get', 'subclass'], ['literal', Object.keys(TOURISM_MAKI)]],
+  'any',
+  ['in', poiKey, ['literal', Object.keys(POI_MAKI)]],
+  ['in', ['get', 'class'], ['literal', Object.keys(POI_CLASS_MAKI)]],
 ];
 
 const PATH_CLASSES = ['footway', 'path', 'cycleway', 'steps', 'bridleway'];
@@ -750,14 +1064,13 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
       // minzoom 屬性 = 該 POI 最早出現的 zoom（tile_pois 輸出；z14 圖磚含 15/16 級供 overzoom）
       filter: ['<=', ['get', 'minzoom'], ['zoom']],
       layout: {
-        'icon-image': [
+        // 子類別 Maki 圖示 → 大類通用圖示 → 圓點
+        'icon-image': poiIconImage(theme, [
           'case',
-          ['==', ['get', 'class'], 'tourism'],
-          tourismIconImage(theme, ['case', ['<=', ['get', 'minzoom'], 14], poiIconId('major', theme), poiIconId('default', theme)]),
           ['in', ['get', 'class'], ['literal', ['railway', 'public_transport']]], poiIconId('transit', theme),
           ['<=', ['get', 'minzoom'], 14], poiIconId('major', theme),
           poiIconId('default', theme),
-        ],
+        ]),
         // 碰撞時保留 sort key 小的：minzoom 小 = 越重要
         'symbol-sort-key': ['get', 'minzoom'],
         'icon-padding': 2,

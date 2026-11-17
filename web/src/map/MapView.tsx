@@ -3,7 +3,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { useEffect, useRef, useState } from 'react';
 import { createDotImage, createIconImage, iconPixelRatio, type RgbaImage } from './icons';
-import { getMakiGlyph } from './makiGlyphs';
+import { loadMakiGlyph } from './makiGlyphs';
 import { BUILDINGS_3D_MINZOOM, INTERACTIVE_LAYER_IDS, MAKI_ICONS, POI_ICONS } from './style';
 
 /** Feature picked by a map click. */
@@ -46,11 +46,11 @@ const BEARING_3D = -20;
  * Returns:
  *   Bitmap and its pixel ratio, or null for ids this app does not generate.
  */
-function createPoiImage(id: string): { data: RgbaImage; ratio: number } | null {
+async function createPoiImage(id: string): Promise<{ data: RgbaImage; ratio: number } | null> {
   const ratio = iconPixelRatio();
   const maki = MAKI_ICONS[id];
   if (maki) {
-    const glyph = getMakiGlyph(maki.maki);
+    const glyph = await loadMakiGlyph(maki.maki);
     // 圖示載入失敗時退回同色圓點，不讓 POI 消失
     const data = glyph
       ? createIconImage(maki.diameter, maki.fill, glyph, ratio)
@@ -129,11 +129,15 @@ export function MapView({ style, threeD, onSelect, onViewChange, onError }: MapV
       map.getCanvas().style.cursor = hits.length > 0 ? 'pointer' : '';
     };
 
-    // 樣式第一次用到圖示時才產生；以裝置像素比例繪製，高 DPI 螢幕才不會糊
-    map.on('styleimagemissing', (e: { id: string }) => {
-      if (map.hasImage(e.id)) return;
-      const image = createPoiImage(e.id);
-      if (image) map.addImage(e.id, image.data, { pixelRatio: image.ratio });
+    // 樣式第一次用到圖示時才產生；以裝置像素比例繪製，高 DPI 螢幕才不會糊。
+    // MapLibre 6 起 styleimagemissing 的 listener 無法補上「當次」請求的圖片（首批圖磚會缺圖），
+    // 必須用 resolver：MapLibre 會 await 它再排版該圖磚的 symbol。
+    let disposed = false;
+    map.setMissingStyleImageResolver(async (id) => {
+      const image = await createPoiImage(id);
+      // await 期間地圖可能已移除，或其他圖磚已先補上同一張圖
+      if (!image || disposed || map.hasImage(id)) return;
+      map.addImage(id, image.data, { pixelRatio: image.ratio });
     });
 
     map.on('load', () => {
@@ -150,6 +154,7 @@ export function MapView({ style, threeD, onSelect, onViewChange, onError }: MapV
     });
 
     return () => {
+      disposed = true;
       map.remove();
       mapRef.current = null;
       appliedStyleRef.current = null;

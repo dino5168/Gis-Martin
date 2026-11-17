@@ -13,12 +13,17 @@ import {
   layerIdsOf,
   MAKI_ICONS,
   makiIconId,
+  type MakiName,
   PALETTE,
   paletteOf,
+  POI_CLASS_MAKI,
+  POI_GROUP_COLOR,
+  POI_GROUP_LABELS,
   POI_ICONS,
+  POI_MAKI,
+  type PoiGroup,
   SOURCE_LAYERS,
   THEMES,
-  TOURISM_MAKI,
 } from './style';
 
 const style = buildStyle('http://localhost:3000');
@@ -172,33 +177,54 @@ describe('POI layer', () => {
   });
 });
 
-describe('tourism Maki icons', () => {
+describe('POI Maki icons', () => {
   // Tasks/4-興趣點.md 列出的 tourism 子類別（筆數 ≥ 20）
-  const REQUIRED = [
+  const TOURISM_REQUIRED = [
     'information', 'attraction', 'viewpoint', 'artwork', 'hotel', 'hostel', 'camp_site', 'guest_house',
     'museum', 'checkpoint', 'picnic_site', 'motel', 'gallery', 'apartment', 'camp_pitch', 'alpine_hut',
   ];
+  const iconExpr = (theme: (typeof THEMES)[number]['id']): string => {
+    const layer = buildStyle('http://localhost:3000', { theme }).layers.find((l) => l.id === 'pois-symbol');
+    return JSON.stringify(layer?.type === 'symbol' ? layer.layout?.['icon-image'] : null);
+  };
 
   it('maps every listed tourism subclass to a Maki glyph', () => {
-    expect(Object.keys(TOURISM_MAKI).sort()).toEqual([...REQUIRED].sort());
+    for (const s of TOURISM_REQUIRED) expect(Object.keys(POI_MAKI), s).toContain(`tourism/${s}`);
   });
 
-  it('defines one Maki image per glyph and theme, coloured with the theme tourism colour', () => {
-    const glyphs = new Set(Object.values(TOURISM_MAKI));
-    expect(Object.keys(MAKI_ICONS)).toHaveLength(glyphs.size * THEMES.length);
+  it('uses only class/subclass keys whose class the importer produces', () => {
+    const classes = ['amenity', 'shop', 'tourism', 'leisure', 'historic', 'office', 'railway', 'public_transport'];
+    for (const key of Object.keys(POI_MAKI)) expect(classes, key).toContain(key.split('/')[0]);
+    for (const cls of Object.keys(POI_CLASS_MAKI)) expect(classes).toContain(cls);
+  });
+
+  it('defines one image per glyph, group and theme, coloured with the group colour of that theme', () => {
+    const pairs = new Set([...Object.values(POI_MAKI), ...Object.values(POI_CLASS_MAKI)].map(([m, g]) => `${m}|${g}`));
+    expect(Object.keys(MAKI_ICONS)).toHaveLength(pairs.size * THEMES.length);
     for (const t of THEMES) {
-      for (const g of glyphs) {
-        expect(MAKI_ICONS[makiIconId(g, t.id)]).toEqual({ maki: g, fill: t.palette.poiTourism, diameter: 18 });
+      for (const pair of pairs) {
+        const [maki, group] = pair.split('|') as [MakiName, PoiGroup];
+        expect(MAKI_ICONS[makiIconId(maki, group, t.id)]).toEqual({
+          maki,
+          fill: t.palette[POI_GROUP_COLOR[group]],
+          diameter: 18,
+        });
       }
     }
   });
 
-  it('routes tourism subclasses to Maki icons and others to the plain dots', () => {
-    const layer = buildStyle('http://localhost:3000', { theme: 'dark' }).layers.find((l) => l.id === 'pois-symbol');
-    const expr = JSON.stringify(layer?.type === 'symbol' ? layer.layout?.['icon-image'] : null);
-    expect(expr).toContain('"maki-lodging-dark"');
-    expect(expr).toContain('["hotel","motel","hostel"]');
+  it('routes subclasses to glyphs, then class fallbacks, then the plain dots', () => {
+    const expr = iconExpr('dark');
+    expect(expr).toContain('"maki-lodging-tourism-dark"');
+    expect(expr).toContain('["tourism/hotel","tourism/motel","tourism/hostel"]');
+    expect(expr).toContain('"maki-bus-transport-dark"');
+    // 未列出的商店子類別 → 購物袋；其他類別 → 圓點
+    expect(expr).toContain('["shop"],"maki-shop-shop-dark"');
     expect(expr).toContain('"poi-transit-dark"');
+  });
+
+  it('gives every POI group a label and a palette colour', () => {
+    expect(Object.keys(POI_GROUP_LABELS).sort()).toEqual(Object.keys(POI_GROUP_COLOR).sort());
   });
 });
 
