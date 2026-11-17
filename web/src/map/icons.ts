@@ -41,6 +41,37 @@ export function glyphPixelSize(diameter: number, pixelRatio: number): number {
 }
 
 /**
+ * Draws a glyph in a solid colour on a transparent square (no disc), e.g. a heading arrow.
+ *
+ * Args:
+ *   diameter: Bounding size in CSS pixels (same canvas size as a disc of this diameter).
+ *   fill: Glyph colour as `#rrggbb`.
+ *   glyph: Coverage mask rasterised at `glyphPixelSize(diameter, pixelRatio)`.
+ *   pixelRatio: Device pixel ratio the bitmap is rendered for.
+ *
+ * Returns:
+ *   RGBA bitmap; alpha follows the glyph coverage.
+ */
+export function createGlyphImage(diameter: number, fill: string, glyph: GlyphMask, pixelRatio = 1): RgbaImage {
+  const [r, g, b] = parseHex(fill);
+  const size = Math.ceil(diameter * pixelRatio) + 2;
+  const data = new Uint8Array(size * size * 4);
+  const offset = Math.floor((size - glyph.size) / 2);
+  for (let gy = 0; gy < glyph.size; gy++) {
+    for (let gx = 0; gx < glyph.size; gx++) {
+      const a = glyph.alpha[gy * glyph.size + gx] ?? 0;
+      if (a === 0) continue;
+      const i = ((gy + offset) * size + (gx + offset)) * 4;
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+      data[i + 3] = a;
+    }
+  }
+  return { width: size, height: size, data };
+}
+
+/**
  * Draws a coloured disc (same as createDotImage) with a white glyph centred on it.
  *
  * Kept free of DOM APIs so it is unit-testable; only the glyph mask needs a canvas.

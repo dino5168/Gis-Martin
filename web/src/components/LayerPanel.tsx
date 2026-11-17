@@ -10,6 +10,7 @@ const swatchKey: Readonly<Record<LayerGroupId, keyof Palette>> = {
   buildings: 'building',
   pois: 'poi',
   labels: 'label',
+  buses: 'busGo',
 };
 
 interface LayerPanelProps {

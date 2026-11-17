@@ -104,6 +104,38 @@ body {
   gap: 8px;
 }
 
+.bus-status {
+  display: grid;
+  gap: 6px;
+}
+
+.bus-status h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+.bus-status ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.bus-status li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bus-status .hint {
+  margin: 0;
+  font-weight: 400;
+}
+
 .style-select {
   display: grid;
   gap: 6px;

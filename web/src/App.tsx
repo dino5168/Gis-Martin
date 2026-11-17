@@ -1,4 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
+import { ROUTE_1 } from './bus/busData';
+import { useBusPositions } from './bus/useBusPositions';
+import { BusStatus } from './components/BusStatus';
 import { FeatureInfo } from './components/FeatureInfo';
 import { LayerPanel } from './components/LayerPanel';
 import { StyleSwitcher } from './components/StyleSwitcher';
@@ -28,9 +31,12 @@ export function App({ config }: AppProps) {
   const [view, setView] = useState<ViewState | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [threeD, setThreeD] = useState(false);
+  // 圖層關閉時停止輪詢（每次都要下載全市約 50 KB）
+  const busesOn = !hiddenGroups.has('buses');
+  const bus = useBusPositions(ROUTE_1, busesOn);
   const style = useMemo(
-    () => buildStyle(config.martinUrl, { theme, hiddenGroups, threeD }),
-    [config.martinUrl, theme, hiddenGroups, threeD],
+    () => buildStyle(config.martinUrl, { theme, hiddenGroups, threeD, buses: bus.buses }),
+    [config.martinUrl, theme, hiddenGroups, threeD, bus.buses],
   );
 
   const changeTheme = useCallback((next: ThemeId) => {
@@ -57,6 +63,7 @@ export function App({ config }: AppProps) {
         <StyleSwitcher theme={theme} onChange={changeTheme} />
         <ViewModeToggle threeD={threeD} buildingsHidden={hiddenGroups.has('buildings')} onChange={setThreeD} />
         <LayerPanel hiddenGroups={hiddenGroups} palette={paletteOf(theme)} onToggle={toggleGroup} />
+        {busesOn && <BusStatus route={ROUTE_1} state={bus} palette={paletteOf(theme)} />}
         <FeatureInfo feature={selected} onClose={() => setSelected(null)} />
       </aside>
 

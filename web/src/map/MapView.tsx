@@ -2,7 +2,7 @@ import { Map as MapLibreMap, NavigationControl, ScaleControl, type MapMouseEvent
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { useEffect, useRef, useState } from 'react';
-import { createDotImage, createIconImage, iconPixelRatio, type RgbaImage } from './icons';
+import { createDotImage, createGlyphImage, createIconImage, iconPixelRatio, type RgbaImage } from './icons';
 import { loadMakiGlyph } from './makiGlyphs';
 import { BUILDINGS_3D_MINZOOM, INTERACTIVE_LAYER_IDS, MAKI_ICONS, POI_ICONS } from './style';
 
@@ -53,9 +53,11 @@ async function createPoiImage(id: string): Promise<{ data: RgbaImage; ratio: num
   if (maki) {
     const glyph = await loadMakiGlyph(maki.maki);
     // 圖示載入失敗時退回同色圓點，不讓 POI 消失
-    const data = glyph
-      ? createIconImage(maki.diameter, maki.fill, glyph, ratio)
-      : createDotImage(maki.diameter, maki.fill, ratio);
+    const data = !glyph
+      ? createDotImage(maki.diameter, maki.fill, ratio)
+      : maki.shape === 'glyph'
+        ? createGlyphImage(maki.diameter, maki.fill, glyph, ratio)
+        : createIconImage(maki.diameter, maki.fill, glyph, ratio);
     return { data, ratio };
   }
   const dot = POI_ICONS[id];
@@ -101,7 +103,7 @@ export function MapView({ style, threeD, onSelect, onViewChange, onError }: MapV
       maxZoom: 19,
       // 中文由瀏覽器字型繪製，不需下載 CJK glyph PBF
       localIdeographFontFamily: "'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif",
-      attributionControl: { compact: true, customAttribution: '© OpenStreetMap contributors' },
+      attributionControl: { compact: true, customAttribution: ['© OpenStreetMap contributors', '公車動態：臺北市政府交通局（Data.Taipei）'] },
     });
     mapRef.current = map;
     appliedStyleRef.current = styleRef.current;

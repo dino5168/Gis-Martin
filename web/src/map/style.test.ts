@@ -2,6 +2,8 @@ import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 import {
   BUILDINGS_3D_LAYER_ID,
+  BUS_SOURCE_ID,
+  busIconIds,
   COUNTRY_BOUNDARY_MINZOOM,
   buildStyle,
   DEFAULT_THEME,
@@ -200,7 +202,7 @@ describe('POI Maki icons', () => {
 
   it('defines one image per glyph, group and theme, coloured with the group colour of that theme', () => {
     const pairs = new Set([...Object.values(POI_MAKI), ...Object.values(POI_CLASS_MAKI)].map(([m, g]) => `${m}|${g}`));
-    expect(Object.keys(MAKI_ICONS)).toHaveLength(pairs.size * THEMES.length);
+    expect(Object.keys(MAKI_ICONS).filter((id) => id.startsWith('maki-'))).toHaveLength(pairs.size * THEMES.length);
     for (const t of THEMES) {
       for (const pair of pairs) {
         const [maki, group] = pair.split('|') as [MakiName, PoiGroup];
@@ -208,6 +210,7 @@ describe('POI Maki icons', () => {
           maki,
           fill: t.palette[POI_GROUP_COLOR[group]],
           diameter: 18,
+          shape: 'disc',
         });
       }
     }
@@ -276,6 +279,53 @@ describe('visibility baked into the style', () => {
     const s = buildStyle('http://localhost:3000', { hiddenGroups: new Set(['landuse']) });
     expect(visibilityOf(s, 'background')).toBeUndefined();
     expect(visibilityOf(s, 'land-fill')).toBeUndefined();
+  });
+});
+
+describe('live buses', () => {
+  const sample = {
+    type: 'FeatureCollection' as const,
+    features: [
+      {
+        type: 'Feature' as const,
+        id: '706-U3',
+        geometry: { type: 'Point' as const, coordinates: [121.5456, 25.0181] as [number, number] },
+        properties: {
+          name: '1 號公車 706-U3', route: '1 號', plate: '706-U3', dir: 'go' as const,
+          direction: '往松仁路', speed: 19, azimuth: 47, data_time: '2026-11-17 17:19:50',
+        },
+      },
+    ],
+  };
+
+  it('puts bus positions into a GeoJSON source of the style', () => {
+    const s = buildStyle('http://localhost:3000', { buses: sample });
+    expect(s.sources[BUS_SOURCE_ID]).toEqual({ type: 'geojson', data: sample });
+    expect(validateStyleMin(s).map((e) => e.message)).toEqual([]);
+  });
+
+  it('defaults to an empty collection so the layers always exist', () => {
+    expect(style.sources[BUS_SOURCE_ID]).toMatchObject({ type: 'geojson', data: { features: [] } });
+  });
+
+  it('draws buses above every other layer and toggles them as one group', () => {
+    const ids = style.layers.map((l) => l.id);
+    expect(ids.slice(-2)).toEqual(['buses-heading', 'buses-symbol']);
+    expect(layerIdsOf('buses')).toEqual(['buses-heading', 'buses-symbol']);
+    expect(layerVisibility(new Set(['buses']), false)['buses-symbol']).toBe('none');
+  });
+
+  it.each(THEMES.map((t) => t.id))('%s theme: bus images exist with the theme direction colours', (theme) => {
+    const t = THEMES.find((x) => x.id === theme);
+    const go = busIconIds('go', theme);
+    const back = busIconIds('back', theme);
+    expect(MAKI_ICONS[go.disc]).toMatchObject({ maki: 'bus', fill: t?.palette.busGo, shape: 'disc' });
+    expect(MAKI_ICONS[back.arrow]).toMatchObject({ maki: 'triangle', fill: t?.palette.busBack, shape: 'glyph' });
+  });
+
+  it('rotates the heading arrow with the bus azimuth', () => {
+    const heading = style.layers.find((l) => l.id === 'buses-heading');
+    expect(heading?.type === 'symbol' ? heading.layout?.['icon-rotate'] : null).toEqual(['get', 'azimuth']);
   });
 });
 

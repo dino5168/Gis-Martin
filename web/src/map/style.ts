@@ -1,3 +1,4 @@
+import { EMPTY_BUSES, type BusFeatureCollection, type BusFeatureProperties } from '../bus/busData';
 import type {
   ExpressionSpecification,
   LayerSpecification,
@@ -44,6 +45,7 @@ export const LAYER_GROUPS = [
   { id: 'buildings', label: '建物' },
   { id: 'pois', label: '興趣點' },
   { id: 'labels', label: '文字標註' },
+  { id: 'buses', label: '公車動態（1 號）' },
 ] as const;
 export type LayerGroupId = (typeof LAYER_GROUPS)[number]['id'];
 
@@ -91,6 +93,8 @@ const DEFAULT_PALETTE = {
   poiLeisure: '#4c9a3f',
   poiHistoric: '#a5823b',
   poiOffice: '#6b7a8f',
+  busGo: '#e4572e',
+  busBack: '#7b2cbf',
   label: '#3a3a3a',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -144,6 +148,8 @@ const BRIGHT_PALETTE: Palette = {
   poiLeisure: '#5aa84c',
   poiHistoric: '#b08e47',
   poiOffice: '#7a889c',
+  busGo: '#e4572e',
+  busBack: '#7b2cbf',
   label: '#333333',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -189,6 +195,8 @@ const DARK_PALETTE: Palette = {
   poiLeisure: '#78c46a',
   poiHistoric: '#d4b060',
   poiOffice: '#9aabc2',
+  busGo: '#ff8a5c',
+  busBack: '#c39bf0',
   label: '#e6e6e6',
   labelHalo: '#1d1f22',
   transitCasing: '#1d1f22',
@@ -235,6 +243,8 @@ const SMOOTH_PALETTE: Palette = {
   poiLeisure: '#8fb886',
   poiHistoric: '#c2aa7a',
   poiOffice: '#98a3b2',
+  busGo: '#e88a6e',
+  busBack: '#a07cc5',
   label: '#5a5a5a',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -281,6 +291,8 @@ const TONER_PALETTE: Palette = {
   poiLeisure: '#000000',
   poiHistoric: '#000000',
   poiOffice: '#000000',
+  busGo: '#000000',
+  busBack: '#555555',
   label: '#000000',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -327,6 +339,8 @@ const TONER_LITE_PALETTE: Palette = {
   poiLeisure: '#777777',
   poiHistoric: '#777777',
   poiOffice: '#777777',
+  busGo: '#555555',
+  busBack: '#999999',
   label: '#555555',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
@@ -690,16 +704,52 @@ const MAKI_ENTRIES: readonly (readonly [MakiName, PoiGroup])[] = [
   ...Object.values(POI_CLASS_MAKI),
 ];
 
-/** Every Maki image id the styles can request, mapped to its glyph and disc colour. */
-export const MAKI_ICONS: Readonly<Record<string, { maki: MakiName; fill: string; diameter: number }>> =
-  Object.fromEntries(
-    THEMES.flatMap((t) =>
-      MAKI_ENTRIES.map(([maki, group]) => [
-        makiIconId(maki, group, t.id),
-        { maki, fill: t.palette[POI_GROUP_COLOR[group]], diameter: MAKI_ICON_DIAMETER },
-      ]),
-    ),
-  );
+/** How a generated Maki image is drawn: white glyph on a coloured disc, or the glyph itself in colour. */
+export interface MakiIconSpec {
+  maki: MakiName;
+  fill: string;
+  diameter: number;
+  shape: 'disc' | 'glyph';
+}
+
+/** GeoJSON source holding live bus positions (updated through the style; see buildStyle). */
+export const BUS_SOURCE_ID = 'buses';
+/** Bus discs are larger than POIs: moving vehicles are the focus when the layer is on. */
+const BUS_ICON_DIAMETER = 22;
+type BusDir = BusFeatureProperties['dir'];
+const BUS_DIR_COLOR: Readonly<Record<BusDir, keyof Palette>> = { go: 'busGo', back: 'busBack', unknown: 'poiTransit' };
+
+/**
+ * Image ids of the bus marker and its heading arrow.
+ *
+ * Args:
+ *   dir: Travel direction (selects the colour).
+ *   theme: Theme id.
+ *
+ * Returns:
+ *   Disc and arrow image ids.
+ */
+export function busIconIds(dir: BusDir, theme: ThemeId): { disc: string; arrow: string } {
+  return { disc: `bus-${dir}-${theme}`, arrow: `bus-arrow-${dir}-${theme}` };
+}
+
+/** Every generated Maki image id the styles can request (POI discs, bus discs and heading arrows). */
+export const MAKI_ICONS: Readonly<Record<string, MakiIconSpec>> = Object.fromEntries(
+  THEMES.flatMap((t) => [
+    ...MAKI_ENTRIES.map(([maki, group]): [string, MakiIconSpec] => [
+      makiIconId(maki, group, t.id),
+      { maki, fill: t.palette[POI_GROUP_COLOR[group]], diameter: MAKI_ICON_DIAMETER, shape: 'disc' },
+    ]),
+    ...(Object.keys(BUS_DIR_COLOR) as BusDir[]).flatMap((dir): [string, MakiIconSpec][] => {
+      const ids = busIconIds(dir, t.id);
+      const fill = t.palette[BUS_DIR_COLOR[dir]];
+      return [
+        [ids.disc, { maki: 'bus', fill, diameter: BUS_ICON_DIAMETER, shape: 'disc' }],
+        [ids.arrow, { maki: 'triangle', fill, diameter: BUS_ICON_DIAMETER, shape: 'glyph' }],
+      ];
+    }),
+  ]),
+);
 
 /** `class/subclass` lookup key of a POI feature. */
 const poiKey: ExpressionSpecification = ['concat', ['get', 'class'], '/', ['coalesce', ['get', 'subclass'], '']];
@@ -1122,6 +1172,48 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
       paint: { ...textPaint, 'text-color': p.boundaryCounty },
     },
   },
+
+  // ---- 公車動態（Data.Taipei 即時位置，GeoJSON；畫在最上層）----
+  {
+    group: 'buses',
+    layer: {
+      // 方向箭頭：三角形隨方位角旋轉並繞著圓點外緣，指向行進方向
+      id: 'buses-heading', type: 'symbol', source: BUS_SOURCE_ID,
+      filter: ['!=', ['get', 'dir'], 'unknown'],
+      layout: {
+        'icon-image': ['match', ['get', 'dir'], 'go', busIconIds('go', theme).arrow, busIconIds('back', theme).arrow],
+        'icon-rotate': ['get', 'azimuth'],
+        'icon-rotation-alignment': 'map',
+        // offset 會隨 icon-rotate 一起旋轉：向上 14 px 即沿行進方向推到圓外
+        'icon-offset': [0, -14],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    },
+  },
+  {
+    group: 'buses',
+    layer: {
+      id: 'buses-symbol', type: 'symbol', source: BUS_SOURCE_ID,
+      layout: {
+        'icon-image': [
+          'match', ['get', 'dir'],
+          'go', busIconIds('go', theme).disc,
+          'back', busIconIds('back', theme).disc,
+          busIconIds('unknown', theme).disc,
+        ],
+        // 車輛不參與 POI 碰撞隱藏，永遠顯示
+        'icon-allow-overlap': true,
+        'text-field': ['step', ['zoom'], '', 13, ['get', 'plate']],
+        'text-font': FONT,
+        'text-size': 11,
+        'text-offset': [0, 1.3],
+        'text-anchor': 'top',
+        'text-optional': true,
+      },
+      paint: textPaint,
+    },
+  },
   ];
 }
 
@@ -1147,6 +1239,8 @@ export interface StyleOptions {
   hiddenGroups?: ReadonlySet<LayerGroupId>;
   /** LOD1 3D building mode. */
   threeD?: boolean;
+  /** Live bus positions; part of the style so setStyle diff updates them (setGeoJSONSourceData). */
+  buses?: BusFeatureCollection;
 }
 
 /**
@@ -1164,7 +1258,7 @@ export interface StyleOptions {
  *   A MapLibre style specification (v8).
  */
 export function buildStyle(martinUrl: string, options: StyleOptions = {}): StyleSpecification {
-  const { theme = DEFAULT_THEME, hiddenGroups = new Set<LayerGroupId>(), threeD = false } = options;
+  const { theme = DEFAULT_THEME, hiddenGroups = new Set<LayerGroupId>(), threeD = false, buses = EMPTY_BUSES } = options;
   const visibility = layerVisibility(hiddenGroups, threeD);
   return {
     version: 8,
@@ -1172,6 +1266,8 @@ export function buildStyle(martinUrl: string, options: StyleOptions = {}): Style
     glyphs: GLYPHS_URL,
     sources: {
       [SOURCE_ID]: { type: 'vector', url: compositeTileJsonUrl(martinUrl) },
+      // 公車資料若放在 style 外以 setData 更新，下一次 setStyle diff 會把它比對回空資料；放進 style 才一致
+      [BUS_SOURCE_ID]: { type: 'geojson', data: buses },
     },
     layers: buildLayers(theme).map(({ layer }) => {
       const v = visibility[layer.id];

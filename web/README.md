@@ -48,6 +48,11 @@ pnpm dev                            # http://localhost:5173
   - 分組（`PoiGroup`，9 組：餐飲／購物／醫療／交通／公共教育／休閒娛樂／觀光／古蹟／辦公金融）決定圓底顏色，每個主題各有一組色（`Palette.poiFood` 等，`POI_GROUP_COLOR`）。圖示 id 為 `maki-{圖示}-{分組}-{主題}`。
   - 產生方式：`MapView` 以 `map.setMissingStyleImageResolver()` 在第一次用到時非同步把 SVG 轉成遮罩（`makiGlyphs.ts`，快取 Promise）再由純函式 `createIconImage()` 合成。**不要改回 `styleimagemissing`**：MapLibre 6 起該事件的 listener 無法補上當次請求的圖片，首批圖磚會缺圖。
   - SVG 以 `?raw` 只打包用到的 104 個（全部 215 個約 164 KB）；增減對照表時同步 `makiGlyphs.ts` 的 import（`Record<MakiName, string>` 型別與測試會抓漏）。
+- **公車動態（1 號公車）**：`src/bus/`。瀏覽器每 30 秒直接抓 Data.Taipei 的 `https://tcgbusfs.blob.core.windows.net/blobbus/GetBusData.gz`（CORS `*`、免金鑰；全市約 2,100 輛、gzip 約 50 KB），以 `DecompressionStream('gzip')` 解壓（伺服器回 `application/octet-stream`，瀏覽器不會自動解壓），`parseBusData()` 驗證後篩 `ROUTE_1.routeIds`（`10723` 主線、`160559` 狗狗公車）。座標為 WGS84＝EPSG:4326，直接作為 GeoJSON。
+  - 車輛位置**放在 style 裡**（`buildStyle({ buses })` 的 `buses` GeoJSON source），由同一次 `setStyle` diff 更新；若在 style 外 `setData`，下一次 setStyle（切主題、開關圖層）會被比對回空資料。
+  - 圖示：`bus-{go|back|unknown}-{主題}`（Maki `bus` 圓底，去程／返程不同色：`Palette.busGo`／`busBack`）＋ `bus-arrow-*`（Maki `triangle`，依 `Azimuth` 旋轉、繞在圓外指出行進方向）。
+  - 「公車動態」圖層關閉或分頁在背景（`visibilitychange`）時停止輪詢；下載失敗保留上一筆位置並在側欄顯示錯誤。
+  - 資料來源標示：attribution 加上「公車動態：臺北市政府交通局（Data.Taipei）」。
 - **地圖樣式（主題）**：側欄「地圖樣式」下拉選單（`<select>`）切換 `預設`／`OSM Bright`／`柔和`／`暗色`／`黑白`／`黑白淡色`（柔和、黑白、黑白淡色分別參考 Stadia 的 Alidade Smooth、Stamen Toner、Toner Lite 的用途與配色方向，名稱不沿用其品牌）。Stadia 清單中的 Satellite／Terrain／Watercolor 需要衛星影像、地形陰影或水彩 raster 圖磚，本專案沒有這些資料來源，未提供。主題 id 會存進 localStorage，**不可改名**。各主題**只換色盤（`Palette`），圖層 id、filter、順序完全相同**，所以 `setStyle` diff 只會改 paint 屬性，相機與已載入圖磚不受影響。新增主題＝在 `style.ts` 加一份 `Palette` 並加入 `THEMES`（色值必須是 `#rrggbb`，POI 圓點由此產生）。POI 圖示 id 含主題名（`poi-major-dark`），因為 MapLibre 在 `setStyle` 後會保留已加入的圖片，共用 id 會沿用舊主題顏色。
   - OSM Bright 原始 style JSON（OpenMapTiles，CC-BY 4.0）是給 OpenMapTiles schema（`transportation`、`landcover`、`place`…）用的，與本專案 Martin 自訂的 9 層不相容，**無法直接載入**；此處只取其配色近似值。
 - **除錯**：開發模式下 `window.__map` 是 MapLibre 實例（production build 不會有）。

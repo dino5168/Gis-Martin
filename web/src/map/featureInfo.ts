@@ -23,6 +23,7 @@ const LAYER_LABELS: Readonly<Record<string, string>> = {
   transit: '捷運／高鐵路線',
   buildings: '建物',
   pois: '興趣點',
+  buses: '公車動態',
 };
 
 // 顯示順序即宣告順序；未列出的屬性排在後面（依字母序）
@@ -46,11 +47,19 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   bridge: '橋梁',
   tunnel: '隧道',
   osm_id: 'OSM ID',
+  // 公車動態
+  route: '路線',
+  plate: '車牌',
+  direction: '方向',
+  speed: '車速',
+  azimuth: '方位角',
+  data_time: '定位時間',
 };
 
 // 出圖控制用的內部屬性，對使用者沒有意義
 // colour 是渲染用的色碼，面板以路線名稱呈現即可
-const HIDDEN_FIELDS: ReadonlySet<string> = new Set(['minzoom', 'has_parts', 'colour']);
+// dir 是公車圖示選色用的代碼，面板顯示 direction
+const HIDDEN_FIELDS: ReadonlySet<string> = new Set(['minzoom', 'has_parts', 'colour', 'dir']);
 
 // 估計值必須標明，避免使用者把推估高度當成實測
 const HEIGHT_SOURCES: Readonly<Record<string, string>> = {
@@ -143,6 +152,8 @@ export function formatValue(key: string, value: unknown): string | null {
     if (key === 'admin_level') return ADMIN_LEVELS[value] ?? `第 ${value} 級`;
     if (key === 'oneway') return DIRECTIONS.get(value) ?? String(value);
     if (key === 'render_height' || key === 'render_min_height') return `${value.toFixed(1)} m`;
+    if (key === 'speed') return `${value} km/h`;
+    if (key === 'azimuth') return `${value}°`;
     return String(value);
   }
 
