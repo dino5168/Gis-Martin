@@ -9,7 +9,9 @@
 
 ### 2026-11-20 收工狀態（下次接續）
 
-- 最新 commit：`86b1d64`（OSRM Caddy 代理＋quick tunnel）；Pages 已以兩個變數重新部署並在正式站驗證：底圖正常、路徑規劃可算路線
+- 最新 commit：`0d3333a`（多點路線規劃，`Tasks/6`）；已 push、Pages 自動部署（不需改變數），**正式站多點路線尚未實地驗證**
+- 前一版 `86b1d64`（OSRM Caddy 代理＋quick tunnel）已在正式站驗證：底圖正常、路徑規劃可算路線
+- Vite 開發伺服器因系統記憶體不足被停止（非程式問題）；下次需手動 `pnpm dev`
 - **兩條 quick tunnel 皆為排程工作**（使用者登入時執行、72 小時自動停止、**登出／重開機就會停**；未設失敗自動重啟，因為重啟會換網址）
 
 | 排程工作 | 轉到 | 目前網址（Pages 變數） | 日誌 | 約略到期 |
@@ -67,14 +69,16 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 | 21 | 興趣點類別整理（`Tasks/3`） | 8 大類、693 子類別統計表（筆數、有名稱、出圖 zoom）；**公車站牌（`public_transport=platform`+`highway=bus_stop`）改為 z16 出圖**（49,039 筆，z14 合併圖磚 450 → 456 KB） | `Tasks/3-興趣點資料整理.md` |
 | 22 | POI 改用 Maki 圖示（`Tasks/4`） | `@mapbox/maki` 8.2.0（CC0，可商用）；204 個 `class/subclass` → 104 個圖示、9 分組配色＋大類預設圖示；**修正 MapLibre 6 `styleimagemissing` 無法補當次請求圖片的問題 → 改用 `setMissingStyleImageResolver()`**（原本首批圖磚會缺圖示與道路名稱） | web/README.md |
 | 23 | 台北市公車動態（`Tasks/Router/1-串接API.md`） | 前端直接輪詢 Data.Taipei `GetBusData.gz`（CORS `*`、免金鑰、30 秒、`DecompressionStream` 解壓、WGS84）；去／返程配色＋依方位角旋轉的方向箭頭；路線下拉選單 416 條（`GetRoute.gz`，**`RouteID`＝`pathAttributeId`**），選路線自動縮放；圖層關閉或背景分頁停止輪詢 | web/README.md |
-| 24 | 路徑規劃（`Question/1-最短路徑.md`） | 評估 pgRouting（現有 `roads` 未在路口切段、無 node id／通行 tags）後改採**自架 OSRM 6.0（Docker，MLD）**：car／foot 建置共約 4 分鐘、執行時約 1.7 GB；開車結果與 OSRM 官方 demo 一致，查詢 4–12 ms。前端側欄「路徑規劃」：地圖點選起訖、開車／步行、對調、清除，路線疊在 GeoJSON source；`VITE_OSRM_URL` 選用（dev 經 Vite proxy）；vitest 156 項通過、瀏覽器驗證。**正式站尚未開放**（需 named tunnel） | web/README.md、`Question/1-最短路徑.md` |
+| 24 | 路徑規劃（`Question/1-最短路徑.md`） | 評估 pgRouting（現有 `roads` 未在路口切段、無 node id／通行 tags）後改採**自架 OSRM 6.0（Docker，MLD）**：car／foot 建置共約 4 分鐘、執行時約 1.7 GB；開車結果與 OSRM 官方 demo 一致，查詢 4–12 ms。前端側欄「路徑規劃」：地圖點選起訖、開車／步行、對調、清除，路線疊在 GeoJSON source；`VITE_OSRM_URL` 選用（dev 經 Vite proxy）；vitest 156 項通過、瀏覽器驗證。正式站經 Caddy＋quick tunnel 開放（長期仍需 named tunnel） |
+| 25 | 多點路線（`Tasks/6`，參考 Google 地圖） | A／B／C… 地點清單（最多 10）、拖曳圓點或 Alt+↑↓ 排序、⊕ 新增目的地、反轉順序、每列 ×；欄位顯示 OSRM `/nearest` 道路名稱（無名顯示座標）；地圖標記字母與清單一致；新增 `routing/waypoints.ts` 純函式；vitest 174 項、typecheck、build 通過，本機瀏覽器驗證。差異：欄位不能輸入地址搜尋（需地理編碼，列待辦） | web/README.md、`Tasks/6-參考Google最短路徑.md` | web/README.md、`Question/1-最短路徑.md` |
 
 ### 2026-11-20 工作紀錄
 
 - quick tunnel 已在登出／重開機時停掉（排程工作 Ready）→ 重啟、Pages 改 `VITE_MARTIN_URL` 重新部署，正式站恢復
 - `Tasks/5` 臺北市官方公車站牌 Shapefile：評估後**不匯入**（OSM 已涵蓋 82%、官方名稱 16% 被截斷），只註記；`Data/` 加入 `.gitignore`
 - `Question/1` 最短路徑：pgRouting（現有 roads 不可直接用）vs OSRM 評估 → 自架 OSRM PoC → 前端路徑規劃（#24）→ Caddy 代理＋第二條 quick tunnel，正式站開放
-- commits：`ea849f9`、`338ea55`、`86b1d64`；前端 vitest 156 項、typecheck、build 通過
+- `Tasks/6` 多點路線（#25）
+- commits：`ea849f9`、`338ea55`、`86b1d64`、`c03a7a6`、`0d3333a`；前端 vitest 174 項、typecheck、build 通過
 
 ### 2026-11-17 工作紀錄（下午）
 
