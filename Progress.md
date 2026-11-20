@@ -1,37 +1,40 @@
 # Progress — 台灣 OSM 向量圖磚（Gis-Martin）
 
-> 最後更新：2026-11-17　｜　專案說明與注意事項見 [CLAUDE.md](CLAUDE.md)
+> 最後更新：2026-11-20　｜　專案說明與注意事項見 [CLAUDE.md](CLAUDE.md)
 > 參考設計圖：`images/Margin.png`（OSM PBF → osm2pgsql → PostGIS → Martin → MapLibre GL JS → React GIS）
 
 ## 目前狀態（一句話）
 
-整條管線已在本機運作：PostGIS 有完整台灣資料，Martin 以 Windows 服務開機自動提供 MVT（9 層）。**前端已上線** https://gis-martin.pages.dev（Cloudflare Pages，GitHub `main` push 自動部署），功能：6 種地圖樣式下拉選單、2D／3D（LOD1）、Maki POI 圖示（9 分組配色）、**台北市公車即時動態（416 條路線下拉選單）**。**後端仍靠 quick tunnel 暫時對外**（Claude Code 背景程序、網址會變）→ 需網域＋named tunnel 才能長期運作。
+整條管線已在本機運作：PostGIS 有完整台灣資料，Martin 以 Windows 服務開機自動提供 MVT（9 層）。**前端已上線** https://gis-martin.pages.dev（Cloudflare Pages，GitHub `main` push 自動部署），功能：6 種地圖樣式、2D／3D（LOD1）、Maki POI 圖示、台北市公車即時動態（416 條路線）、**路徑規劃（自架 OSRM，開車／步行）**。**後端（Martin、OSRM）仍靠兩條 quick tunnel 暫時對外**（排程工作、網址每次重啟都會變）→ 需網域＋named tunnel 才能長期運作。
 
-### 2026-11-17 收工狀態（下次接續）
+### 2026-11-20 收工狀態（下次接續）
 
-- 最新 commit：`5d25ab2`（公車路線下拉選單）；Pages 部署成功
-- quick tunnel 改由 **Windows 排程工作 `GisMartin-QuickTunnel`** 執行（2026-11-17 17:55 起，**72 小時後自動停止**，約 2026-11-20 17:55）：`conhost --headless cloudflared tunnel --no-autoupdate --url http://127.0.0.1:3000`，日誌 `C:\gis\osm\logs\quicktunnel.log`，不受 Claude Code session 影響
-  - 目前網址 `https://exterior-citizens-occasional-switching.trycloudflare.com`（已填入 Pages `VITE_MARTIN_URL` 並重新部署）
-  - 以「使用者登入時」執行（S4U 需管理員）：**登出、重開機（含 Windows Update）就會停**；未設失敗自動重啟，因為重啟會換網址
-  - 重啟步驟：`Start-ScheduledTask GisMartin-QuickTunnel` → 從日誌取新網址（`Select-String C:\gis\osm\logs\quicktunnel.log 'trycloudflare.com' | Select -Last 1`）→ Pages 設定改 `VITE_MARTIN_URL` → 部署頁「重試部署」
-  - 停止／移除：`Stop-ScheduledTask GisMartin-QuickTunnel`；`Unregister-ScheduledTask GisMartin-QuickTunnel -Confirm:$false`
-  - 停止後正式站底圖會空白（公車動態不受影響，因為直接連 Data.Taipei）
+- 最新 commit：`86b1d64`（OSRM Caddy 代理＋quick tunnel）；Pages 已以兩個變數重新部署並在正式站驗證：底圖正常、路徑規劃可算路線
+- **兩條 quick tunnel 皆為排程工作**（使用者登入時執行、72 小時自動停止、**登出／重開機就會停**；未設失敗自動重啟，因為重啟會換網址）
+
+| 排程工作 | 轉到 | 目前網址（Pages 變數） | 日誌 | 約略到期 |
+|---|---|---|---|---|
+| `GisMartin-QuickTunnel` | Martin `127.0.0.1:3000` | `https://nelson-coaching-announces-connect.trycloudflare.com`（`VITE_MARTIN_URL`） | `C:\gis\osm\logs\quicktunnel.log` | 2026-11-23 08:39 |
+| `GisMartin-OsrmTunnel` | Caddy `127.0.0.1:5080` | `https://authorities-programs-logging-sailing.trycloudflare.com`（`VITE_OSRM_URL`） | `C:\gis\osm\logs\osrmtunnel.log` | 2026-11-23 10:4x |
+
+- 重啟步驟（每條各自）：`Start-ScheduledTask <名稱>` → `Select-String <日誌> 'trycloudflare.com' | Select -Last 1` 取新網址 → Pages Production 改對應變數（**兩個變數都要存在，別互相覆蓋**；結尾不加 `/`）→ Deployments「Retry deployment」
+  - 2026-11-20 曾把 OSRM 網址誤填進 `VITE_MARTIN_URL` → 底圖空白、路徑規劃面板消失；驗證方式：抓正式站 `index-*.js` 確認兩個網址都在
+- 停止／移除：`Stop-ScheduledTask <名稱>`；`Unregister-ScheduledTask <名稱> -Confirm:$false`。Martin 那條停掉 → 底圖空白；OSRM 那條停掉 → 算路線失敗（其餘功能正常）；公車動態直接連 Data.Taipei，不受影響
+- OSRM 容器（Docker Desktop **必須在執行**；皆 `--restart unless-stopped`，同在 docker network `osrm`）：
+  - `osrm-car` `127.0.0.1:5000`、`osrm-foot` `127.0.0.1:5001`（osrm-backend v6.0.0，MLD，資料 `C:\gis\osm\osrm\{car,foot}\`）
+  - `osrm-proxy` `127.0.0.1:5080`（Caddy 2.8.4；設定原始檔 `osrm/Caddyfile` → 副本 `C:\gis\osm\osrm\Caddyfile`）
+- Claude in Chrome：連著兩個瀏覽器，**本機是「Browser 2」**（Browser 1 不在這台電腦，開不了 localhost、看不到 Cloudflare 登入）
 - 起始畫面：三峽 121.37621, 24.93873, z16（`MapView.tsx` 的 `INITIAL_CENTER`）
-
-### 2026-11-20 quick tunnel 現況
-
-- Martin：`GisMartin-QuickTunnel` 於 08:39 重啟 → `https://nelson-coaching-announces-connect.trycloudflare.com`（Pages `VITE_MARTIN_URL`），約 2026-11-23 08:39 自動停止
-- OSRM：Docker 容器 `osrm-proxy`（Caddy 2.8.4，`127.0.0.1:5080`，設定 `osrm/Caddyfile` → 副本 `C:\gis\osm\osrm\Caddyfile`；`/driving/*` → `osrm-car`、`/foot/*` → `osrm-foot`，三個容器在 docker network `osrm`）＋排程工作 **`GisMartin-OsrmTunnel`**（同 Martin 那條的設定，72 小時、日誌 `C:\gis\osm\logs\osrmtunnel.log`）→ `https://authorities-programs-logging-sailing.trycloudflare.com`（Pages `VITE_OSRM_URL`），約 2026-11-23 10:4x 自動停止
-  - 重啟：`Start-ScheduledTask GisMartin-OsrmTunnel` → `Select-String C:\gis\osm\logs\osrmtunnel.log 'trycloudflare.com' | Select -Last 1` → 改 Pages `VITE_OSRM_URL` → 重新部署
-  - Docker Desktop 必須在執行（容器 `--restart unless-stopped`，隨 Docker Desktop 啟動）
 
 ## 下次進來先做
 
 ```powershell
 Get-Service postgresql-x64-17, MartinTiles           # 兩者都應為 Running（開機自動啟動）
 Invoke-WebRequest http://127.0.0.1:3000/health -UseBasicParsing | Select-Object StatusCode
+docker ps --format '{{.Names}} {{.Status}}'          # osrm-car / osrm-foot / osrm-proxy（需先開 Docker Desktop）
+Get-ScheduledTask GisMartin-QuickTunnel, GisMartin-OsrmTunnel | Select-Object TaskName, State   # Running 才有對外；Ready = 已停
 Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不是服務，需手動啟動
-# 瀏覽 http://localhost:5173（必須用 localhost）
+# 瀏覽 http://localhost:5173（必須用 localhost）；路徑規劃經 Vite proxy /osrm/* 打本機 OSRM
 ```
 
 ---
@@ -65,6 +68,13 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 | 22 | POI 改用 Maki 圖示（`Tasks/4`） | `@mapbox/maki` 8.2.0（CC0，可商用）；204 個 `class/subclass` → 104 個圖示、9 分組配色＋大類預設圖示；**修正 MapLibre 6 `styleimagemissing` 無法補當次請求圖片的問題 → 改用 `setMissingStyleImageResolver()`**（原本首批圖磚會缺圖示與道路名稱） | web/README.md |
 | 23 | 台北市公車動態（`Tasks/Router/1-串接API.md`） | 前端直接輪詢 Data.Taipei `GetBusData.gz`（CORS `*`、免金鑰、30 秒、`DecompressionStream` 解壓、WGS84）；去／返程配色＋依方位角旋轉的方向箭頭；路線下拉選單 416 條（`GetRoute.gz`，**`RouteID`＝`pathAttributeId`**），選路線自動縮放；圖層關閉或背景分頁停止輪詢 | web/README.md |
 | 24 | 路徑規劃（`Question/1-最短路徑.md`） | 評估 pgRouting（現有 `roads` 未在路口切段、無 node id／通行 tags）後改採**自架 OSRM 6.0（Docker，MLD）**：car／foot 建置共約 4 分鐘、執行時約 1.7 GB；開車結果與 OSRM 官方 demo 一致，查詢 4–12 ms。前端側欄「路徑規劃」：地圖點選起訖、開車／步行、對調、清除，路線疊在 GeoJSON source；`VITE_OSRM_URL` 選用（dev 經 Vite proxy）；vitest 156 項通過、瀏覽器驗證。**正式站尚未開放**（需 named tunnel） | web/README.md、`Question/1-最短路徑.md` |
+
+### 2026-11-20 工作紀錄
+
+- quick tunnel 已在登出／重開機時停掉（排程工作 Ready）→ 重啟、Pages 改 `VITE_MARTIN_URL` 重新部署，正式站恢復
+- `Tasks/5` 臺北市官方公車站牌 Shapefile：評估後**不匯入**（OSM 已涵蓋 82%、官方名稱 16% 被截斷），只註記；`Data/` 加入 `.gitignore`
+- `Question/1` 最短路徑：pgRouting（現有 roads 不可直接用）vs OSRM 評估 → 自架 OSRM PoC → 前端路徑規劃（#24）→ Caddy 代理＋第二條 quick tunnel，正式站開放
+- commits：`ea849f9`、`338ea55`、`86b1d64`；前端 vitest 156 項、typecheck、build 通過
 
 ### 2026-11-17 工作紀錄（下午）
 
