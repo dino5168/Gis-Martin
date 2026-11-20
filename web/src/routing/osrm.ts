@@ -1,4 +1,5 @@
 import { err, ok, type Result } from '../result';
+import { waypointLetter, type Waypoint } from './waypoints';
 
 /** Travel modes; each is served by its own osrm-routed instance (see Question/1-最短路徑.md). */
 export const ROUTE_PROFILES = [
@@ -23,29 +24,46 @@ export interface PlannedRoute {
 // OSRM 的錯誤代碼 → 使用者看得懂的訊息；其餘代碼直接顯示原文
 const OSRM_ERRORS: Readonly<Record<string, string>> = {
   NoRoute: '找不到可通行的路線（可能跨海或道路不相連）',
-  NoSegment: '起點或終點附近沒有可通行的道路',
+  NoSegment: '有地點附近沒有可通行的道路',
   TooBig: '查詢範圍過大',
 };
+
+// 6 位小數 ≈ 0.1 m，再多只是讓網址變長
+function formatCoords(points: readonly LngLat[]): string {
+  return points.map(([lon, lat]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join(';');
+}
 
 /**
  * Builds the OSRM route request URL.
  *
  * Each profile lives under its own path prefix (`{osrmUrl}/{profile}`), so one base URL can
- * front several osrm-routed instances (Vite proxy in dev, reverse proxy / tunnel in production).
+ * front several osrm-routed instances (Vite proxy in dev, Caddy + tunnel in production).
  *
  * Args:
  *   osrmUrl: Validated OSRM base URL without trailing slash.
  *   profile: Travel mode.
- *   from: Start point (EPSG:4326).
- *   to: End point (EPSG:4326).
+ *   points: Stops in visiting order (EPSG:4326), at least two.
  *
  * Returns:
  *   Request URL asking for the full route geometry as GeoJSON.
  */
-export function routeUrl(osrmUrl: string, profile: RouteProfile, from: LngLat, to: LngLat): string {
-  // 6 位小數 ≈ 0.1 m，再多只是讓網址變長
-  const coords = [from, to].map(([lon, lat]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join(';');
-  return `${osrmUrl}/${profile}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
+export function routeUrl(osrmUrl: string, profile: RouteProfile, points: readonly LngLat[]): string {
+  return `${osrmUrl}/${profile}/route/v1/${profile}/${formatCoords(points)}?overview=full&geometries=geojson`;
+}
+
+/**
+ * Builds the OSRM nearest request URL (snaps a point to the road network).
+ *
+ * Args:
+ *   osrmUrl: Validated OSRM base URL without trailing slash.
+ *   profile: Travel mode (walking snaps to footways the car profile ignores).
+ *   point: Clicked location (EPSG:4326).
+ *
+ * Returns:
+ *   Request URL for the single nearest road.
+ */
+export function nearestUrl(osrmUrl: string, profile: RouteProfile, point: LngLat): string {
+  return `${osrmUrl}/${profile}/nearest/v1/${profile}/${formatCoords([point])}?number=1`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -90,14 +108,55 @@ export function parseRouteResponse(json: unknown): Result<PlannedRoute> {
 }
 
 /**
- * Requests a route from OSRM.
+ * Validates an OSRM `/nearest` response and extracts the road name.
+ *
+ * Args:
+ *   json: Parsed response body (untrusted).
+ *
+ * Returns:
+ *   Road name ('' for unnamed roads), or an error.
+ */
+export function parseNearestResponse(json: unknown): Result<string> {
+  if (!isRecord(json) || json.code !== 'Ok' || !Array.isArray(json.waypoints)) {
+    return err('找不到附近的道路');
+  }
+  const first: unknown = json.waypoints[0];
+  return isRecord(first) && typeof first.name === 'string' ? ok(first.name) : err('找不到附近的道路');
+}
+
+/**
+ * GETs an OSRM endpoint and returns its JSON body.
+ *
+ * Args:
+ *   url: Request URL.
+ *   signal: Aborts the request.
+ *
+ * Returns:
+ *   Parsed body, or an error for network failures and non-JSON answers.
+ */
+async function getOsrmJson(url: string, signal?: AbortSignal): Promise<Result<unknown>> {
+  let response: Response;
+  try {
+    response = await fetch(url, { signal });
+  } catch (e) {
+    return err(e instanceof Error ? `無法連線路線服務：${e.message}` : '無法連線路線服務');
+  }
+  // NoRoute／NoSegment 等以 HTTP 400 回應但仍有 JSON 內容，先嘗試解析才能顯示具體原因
+  try {
+    return ok(await response.json());
+  } catch {
+    return err(`路線服務錯誤（HTTP ${response.status}）`);
+  }
+}
+
+/**
+ * Requests a route through all stops from OSRM.
  *
  * Args:
  *   osrmUrl: Validated OSRM base URL without trailing slash.
  *   profile: Travel mode.
- *   from: Start point (EPSG:4326).
- *   to: End point (EPSG:4326).
- *   signal: Aborts the request when the points change before it finishes.
+ *   points: Stops in visiting order (EPSG:4326), at least two.
+ *   signal: Aborts the request when the stops change before it finishes.
  *
  * Returns:
  *   The route, or an error (network failure, service error, no route).
@@ -105,24 +164,33 @@ export function parseRouteResponse(json: unknown): Result<PlannedRoute> {
 export async function fetchRoute(
   osrmUrl: string,
   profile: RouteProfile,
-  from: LngLat,
-  to: LngLat,
+  points: readonly LngLat[],
   signal?: AbortSignal,
 ): Promise<Result<PlannedRoute>> {
-  let response: Response;
-  try {
-    response = await fetch(routeUrl(osrmUrl, profile, from, to), { signal });
-  } catch (e) {
-    return err(e instanceof Error ? `無法連線路線服務：${e.message}` : '無法連線路線服務');
-  }
-  // NoRoute／NoSegment 等以 HTTP 400 回應但仍有 JSON 內容，先嘗試解析才能顯示具體原因
-  let json: unknown;
-  try {
-    json = await response.json();
-  } catch {
-    return err(`路線服務錯誤（HTTP ${response.status}）`);
-  }
-  return parseRouteResponse(json);
+  const body = await getOsrmJson(routeUrl(osrmUrl, profile, points), signal);
+  return body.error ? err(body.error.message) : parseRouteResponse(body.data);
+}
+
+/**
+ * Looks up the name of the road nearest to a point.
+ *
+ * Args:
+ *   osrmUrl: Validated OSRM base URL without trailing slash.
+ *   profile: Travel mode.
+ *   point: Clicked location (EPSG:4326).
+ *   signal: Aborts the request.
+ *
+ * Returns:
+ *   Road name ('' when unnamed), or an error.
+ */
+export async function fetchNearestName(
+  osrmUrl: string,
+  profile: RouteProfile,
+  point: LngLat,
+  signal?: AbortSignal,
+): Promise<Result<string>> {
+  const body = await getOsrmJson(nearestUrl(osrmUrl, profile, point), signal);
+  return body.error ? err(body.error.message) : parseNearestResponse(body.data);
 }
 
 /**
@@ -173,10 +241,10 @@ export function formatDuration(seconds: number): string {
   return hours === 0 ? `${minutes} 分鐘` : `${hours} 小時 ${minutes % 60} 分鐘`;
 }
 
-/** Endpoint role, also the label drawn on the marker. */
-export type RouteEndpoint = 'start' | 'end';
+/** Marker role: first stop, intermediate stop or final destination. */
+export type RouteStopRole = 'start' | 'via' | 'end';
 
-export type RouteFeatureProperties = { role: 'line' } | { role: RouteEndpoint; label: string };
+export type RouteFeatureProperties = { role: 'line' } | { role: RouteStopRole; label: string };
 
 /** GeoJSON fed to the route source of the style. */
 export interface RouteFeatureCollection {
@@ -191,24 +259,29 @@ export interface RouteFeatureCollection {
 export const EMPTY_ROUTE: RouteFeatureCollection = { type: 'FeatureCollection', features: [] };
 
 /**
- * Converts the picked points and the route into GeoJSON for the map.
+ * Converts the stop list and the route into GeoJSON for the map.
  *
  * Args:
- *   start: Start point, if picked.
- *   end: End point, if picked.
- *   route: Route between them, if computed.
+ *   waypoints: Stop list; empty rows get no marker but keep their letter.
+ *   route: Route through the set stops, if computed.
  *
  * Returns:
- *   Line first, then the endpoint markers (so markers draw on top within one layer).
+ *   Line first, then one lettered marker per set stop.
  */
-export function routeToGeoJSON(start: LngLat | null, end: LngLat | null, route: PlannedRoute | null): RouteFeatureCollection {
+export function routeToGeoJSON(waypoints: readonly Waypoint[], route: PlannedRoute | null): RouteFeatureCollection {
   const features: RouteFeatureCollection['features'] = [];
   if (route) {
     features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: route.coordinates }, properties: { role: 'line' } });
   }
-  const points: [RouteEndpoint, string, LngLat | null][] = [['start', '起', start], ['end', '終', end]];
-  for (const [role, label, p] of points) {
-    if (p) features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [p[0], p[1]] }, properties: { role, label } });
-  }
+  const last = waypoints.length - 1;
+  waypoints.forEach((w, i) => {
+    if (!w.point) return;
+    const role: RouteStopRole = i === 0 ? 'start' : i === last ? 'end' : 'via';
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [w.point[0], w.point[1]] },
+      properties: { role, label: waypointLetter(i) },
+    });
+  });
   return features.length === 0 ? EMPTY_ROUTE : { type: 'FeatureCollection', features };
 }

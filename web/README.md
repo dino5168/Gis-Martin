@@ -29,7 +29,7 @@ pnpm dev                            # http://localhost:5173
 | 檔案 | 內容 |
 |---|---|
 | `src/config.ts` | 驗證 `VITE_MARTIN_URL`、選用的 `VITE_OSRM_URL`（Result type） |
-| `src/routing/` | 路徑規劃：OSRM 請求與回應驗證（`osrm.ts`）、選點與查詢狀態（`useRoutePlanner.ts`） |
+| `src/routing/` | 路徑規劃：OSRM 請求與回應驗證（`osrm.ts`）、地點清單純函式（`waypoints.ts`）、狀態與查詢（`useRoutePlanner.ts`） |
 | `src/map/style.ts` | MapLibre style、主題色盤（`THEMES`）、圖層群組（側欄開關） |
 | `src/map/themeStorage.ts` | 以 localStorage 記住使用者選的地圖樣式（不可用時退回預設） |
 | `src/map/featureInfo.ts` | 點選要素的屬性中文化與排序 |
@@ -56,7 +56,11 @@ pnpm dev                            # http://localhost:5173
   - 圖示：`bus-{go|back|unknown}-{主題}`（Maki `bus` 圓底，去程／返程不同色：`Palette.busGo`／`busBack`）＋ `bus-arrow-*`（Maki `triangle`，依 `Azimuth` 旋轉、繞在圓外指出行進方向）。
   - 「公車動態」圖層關閉或分頁在背景（`visibilitychange`）時停止輪詢；下載失敗保留上一筆位置並在側欄顯示錯誤。
   - 資料來源標示：attribution 加上「公車動態：臺北市政府交通局（Data.Taipei）」。
-- **路徑規劃**：`src/routing/`＋`components/RoutePanel.tsx`。側欄「路徑規劃 → 開始」後，地圖點擊改為選起點、終點（`MapView` 的 `onPick`，游標為十字），第三次點擊重新選起點；可切換開車／步行、起訖對調、清除，「結束」清掉路線。
+- **路徑規劃**：`src/routing/`＋`components/RoutePanel.tsx`，介面參考 Google 地圖路線清單（`Tasks/6`）。側欄「路徑規劃 → 開始」後是 A（起點）、B（目的地）兩列；「⊕ 新增目的地」最多 10 列（`MAX_WAYPOINTS`）。
+  - 地圖點擊填入**選取中的列**（`MapView` 的 `onPick`，游標為十字）：預設依序填第一個空白列；全部填滿後地圖點擊恢復查看要素，點某列欄位可重新在地圖上選該點。
+  - 排序：拖曳左側圓點（HTML5 drag-and-drop），鍵盤 Alt+↑／↓；另有「反轉順序」、每列 ×（剩兩列時改為清除該點）、「清除」。
+  - 欄位文字：選點後以 OSRM `/nearest` 查最近道路名稱，無名道路顯示座標（緯度, 經度）。地圖標記字母與清單同列（A、B、C…）；目的地實心、其餘空心。
+  - 至少兩個點才算路線，空白列略過；任一點位、順序或交通方式改變就重算（名稱查回來不重算）。
   - 請求 `{VITE_OSRM_URL}/{driving|foot}/route/v1/{profile}/{lon,lat;lon,lat}?overview=full&geometries=geojson`：每個 profile 是一個 osrm-routed，以路徑前綴區分。開發時 `vite.config.ts` 的 proxy 把 `/osrm/driving` → `127.0.0.1:5000`、`/osrm/foot` → `127.0.0.1:5001`（本機 Docker 容器 `osrm-car`／`osrm-foot`，建置方式見 `Question/1-最短路徑.md`）。
   - **`VITE_OSRM_URL` 未設定時不顯示路徑規劃**；正式站（Cloudflare Pages）目前未設定，待 OSRM 經 named tunnel 對外後再加。
   - 路線與起訖點跟公車一樣放在 `buildStyle({ route })` 的 GeoJSON source（`route`），不在 style 外 `setData`。路線線條在道路／捷運之上、POI 與文字之下；起訖點在文字之上、公車之下。路線色為各主題 `Palette.route`。

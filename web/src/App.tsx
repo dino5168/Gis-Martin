@@ -65,8 +65,8 @@ export function App({ config }: AppProps) {
 
   const planner = useRoutePlanner(config.osrmUrl);
   const routeData = useMemo(
-    () => routeToGeoJSON(planner.points.start, planner.points.end, planner.route),
-    [planner.points, planner.route],
+    () => routeToGeoJSON(planner.waypoints, planner.route),
+    [planner.waypoints, planner.route],
   );
   // 新路線算出來時縮放到整條路線（起訖可能一個在畫面外）
   useEffect(() => {

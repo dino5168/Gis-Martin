@@ -161,6 +161,9 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 - [ ] 對外：named tunnel 依路徑分流 `/osrm/driving`、`/osrm/foot`，Pages 設 `VITE_OSRM_URL`；Cloudflare rate limit
 - [ ] 資料更新流程納入 OSRM 重建（extract → partition → customize，重啟容器）
 - [ ] 機車 profile（預設 car.lua 會走國道）
+- [x] 多點路線（`Tasks/6`，2026-11-20）：參考 Google 地圖清單，A／B／C… 地點、拖曳／Alt+↑↓ 排序、新增目的地（最多 10）、OSRM `/nearest` 道路名稱
+- [ ] 地址／地名搜尋（欄位可輸入文字）：需地理編碼服務（Nominatim／Photon 自架，或用 PostGIS 既有 POI＋道路名稱自建）
+- [ ] 分段時間距離（OSRM `legs`）、逐步轉向指示（`steps=true`）
 
 ### 4. 公車動態（`Tasks/Router/`）
 

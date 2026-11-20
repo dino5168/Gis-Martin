@@ -1210,7 +1210,7 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
     },
   },
 
-  // ---- 路徑規劃起訖點：在文字標註之上，避免被路名蓋住 ----
+  // ---- 路徑規劃地點（A、B、C…）：在文字標註之上，避免被路名蓋住；目的地實心、其餘空心 ----
   {
     group: null,
     layer: {
@@ -1218,8 +1218,8 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
       filter: ['!=', ['get', 'role'], 'line'],
       paint: {
         'circle-radius': 11,
-        'circle-color': ['match', ['get', 'role'], 'start', p.labelHalo, p.route],
-        'circle-stroke-color': ['match', ['get', 'role'], 'start', p.route, p.labelHalo],
+        'circle-color': ['match', ['get', 'role'], 'end', p.route, p.labelHalo],
+        'circle-stroke-color': ['match', ['get', 'role'], 'end', p.labelHalo, p.route],
         'circle-stroke-width': 3,
       },
     },
@@ -1236,7 +1236,7 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
         'text-allow-overlap': true,
         'text-ignore-placement': true,
       },
-      paint: { 'text-color': ['match', ['get', 'role'], 'start', p.route, p.labelHalo] },
+      paint: { 'text-color': ['match', ['get', 'role'], 'end', p.labelHalo, p.route] },
     },
   },
 
