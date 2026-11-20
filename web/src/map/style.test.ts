@@ -24,6 +24,8 @@ import {
   POI_ICONS,
   POI_MAKI,
   type PoiGroup,
+  ROUTE_LAYER_IDS,
+  ROUTE_SOURCE_ID,
   SOURCE_LAYERS,
   THEMES,
 } from './style';
@@ -70,10 +72,16 @@ describe('layer groups', () => {
     }
   });
 
-  it('only the sea/land base layers are outside toggle groups', () => {
+  it('only the sea/land base layers and the planner-driven route are outside toggle groups', () => {
     const grouped = new Set(LAYER_GROUPS.flatMap((g) => layerIdsOf(g.id)));
     const ungrouped = style.layers.filter((l) => !grouped.has(l.id)).map((l) => l.id);
-    expect(ungrouped).toEqual(['background', 'land-fill']);
+    expect(ungrouped).toEqual(['background', 'land-fill', ...ROUTE_LAYER_IDS]);
+  });
+
+  it('route layers are not interactive (clicks pick points while planning)', () => {
+    for (const id of ROUTE_LAYER_IDS) {
+      expect(INTERACTIVE_LAYER_IDS).not.toContain(id);
+    }
   });
 
   it('base layers are not interactive', () => {
@@ -326,6 +334,41 @@ describe('live buses', () => {
   it('rotates the heading arrow with the bus azimuth', () => {
     const heading = style.layers.find((l) => l.id === 'buses-heading');
     expect(heading?.type === 'symbol' ? heading.layout?.['icon-rotate'] : null).toEqual(['get', 'azimuth']);
+  });
+});
+
+describe('route overlay', () => {
+  const route = {
+    type: 'FeatureCollection' as const,
+    features: [
+      {
+        type: 'Feature' as const,
+        geometry: { type: 'LineString' as const, coordinates: [[121.5645, 25.034], [121.517, 25.0478]] as [number, number][] },
+        properties: { role: 'line' as const },
+      },
+    ],
+  };
+
+  it('puts the route into a GeoJSON source and stays valid', () => {
+    const s = buildStyle('http://localhost:3000', { route });
+    expect(s.sources[ROUTE_SOURCE_ID]).toEqual({ type: 'geojson', data: route });
+    expect(validateStyleMin(s).map((e) => e.message)).toEqual([]);
+  });
+
+  it('draws the line under POIs and labels, and the endpoints above labels but under buses', () => {
+    const ids = style.layers.map((l) => l.id);
+    const at = (id: string): number => ids.indexOf(id);
+    expect(at('route-line')).toBeGreaterThan(at('transit-line'));
+    expect(at('route-line')).toBeLessThan(at('pois-symbol'));
+    expect(at('route-line')).toBeLessThan(at('label-roads'));
+    expect(at('route-endpoints')).toBeGreaterThan(at('label-counties'));
+    expect(at('route-endpoints')).toBeLessThan(at('buses-heading'));
+  });
+
+  it.each(THEMES.map((t) => t.id))('%s theme colours the route line', (theme) => {
+    const t = THEMES.find((x) => x.id === theme);
+    const line = buildStyle('http://localhost:3000', { theme }).layers.find((l) => l.id === 'route-line');
+    expect(line?.type === 'line' ? line.paint?.['line-color'] : null).toBe(t?.palette.route);
   });
 });
 

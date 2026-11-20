@@ -5,12 +5,15 @@ import { useBusPositions, useBusRoutes } from './bus/useBusPositions';
 import { BusStatus } from './components/BusStatus';
 import { FeatureInfo } from './components/FeatureInfo';
 import { LayerPanel } from './components/LayerPanel';
+import { RoutePanel } from './components/RoutePanel';
 import { StyleSwitcher } from './components/StyleSwitcher';
 import { ViewModeToggle } from './components/ViewModeToggle';
 import type { AppConfig } from './config';
 import { MapView, type MapFocus, type SelectedFeature, type ViewState } from './map/MapView';
 import { buildStyle, paletteOf, type LayerGroupId, type ThemeId } from './map/style';
 import { browserStorage, loadTheme, saveTheme } from './map/themeStorage';
+import { routeBounds, routeToGeoJSON } from './routing/osrm';
+import { useRoutePlanner } from './routing/useRoutePlanner';
 
 interface AppProps {
   config: AppConfig;
@@ -60,9 +63,19 @@ export function App({ config }: AppProps) {
     focusPending.current = true;
   }, []);
 
+  const planner = useRoutePlanner(config.osrmUrl);
+  const routeData = useMemo(
+    () => routeToGeoJSON(planner.points.start, planner.points.end, planner.route),
+    [planner.points, planner.route],
+  );
+  // 新路線算出來時縮放到整條路線（起訖可能一個在畫面外）
+  useEffect(() => {
+    if (planner.route) setFocus({ bounds: routeBounds(planner.route) });
+  }, [planner.route]);
+
   const style = useMemo(
-    () => buildStyle(config.martinUrl, { theme, hiddenGroups, threeD, buses: bus.buses }),
-    [config.martinUrl, theme, hiddenGroups, threeD, bus.buses],
+    () => buildStyle(config.martinUrl, { theme, hiddenGroups, threeD, buses: bus.buses, route: routeData }),
+    [config.martinUrl, theme, hiddenGroups, threeD, bus.buses, routeData],
   );
 
   const changeTheme = useCallback((next: ThemeId) => {
@@ -88,6 +101,7 @@ export function App({ config }: AppProps) {
         </header>
         <StyleSwitcher theme={theme} onChange={changeTheme} />
         <ViewModeToggle threeD={threeD} buildingsHidden={hiddenGroups.has('buildings')} onChange={setThreeD} />
+        {config.osrmUrl && <RoutePanel planner={planner} />}
         <LayerPanel hiddenGroups={hiddenGroups} palette={paletteOf(theme)} onToggle={toggleGroup} />
         {busesOn && (
           <BusStatus
@@ -107,6 +121,7 @@ export function App({ config }: AppProps) {
           threeD={threeD}
           focus={focus}
           onSelect={setSelected}
+          onPick={planner.picking ? planner.pick : null}
           onViewChange={setView}
           onError={setMapError}
         />

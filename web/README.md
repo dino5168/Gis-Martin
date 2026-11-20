@@ -28,13 +28,14 @@ pnpm dev                            # http://localhost:5173
 
 | 檔案 | 內容 |
 |---|---|
-| `src/config.ts` | 驗證 `VITE_MARTIN_URL`（Result type） |
+| `src/config.ts` | 驗證 `VITE_MARTIN_URL`、選用的 `VITE_OSRM_URL`（Result type） |
+| `src/routing/` | 路徑規劃：OSRM 請求與回應驗證（`osrm.ts`）、選點與查詢狀態（`useRoutePlanner.ts`） |
 | `src/map/style.ts` | MapLibre style、主題色盤（`THEMES`）、圖層群組（側欄開關） |
 | `src/map/themeStorage.ts` | 以 localStorage 記住使用者選的地圖樣式（不可用時退回預設） |
 | `src/map/featureInfo.ts` | 點選要素的屬性中文化與排序 |
 | `src/map/MapView.tsx` | 地圖元件（建立一次；主題、圖層開關、3D 都烘進 style，以 `setStyle(style, { diff: true })` 套用） |
 | `src/map/worker.ts` | 指定 MapLibre worker 網址（見下） |
-| `src/components/` | 側欄：圖層開關、要素資訊 |
+| `src/components/` | 側欄：圖層開關、要素資訊、公車動態、路徑規劃 |
 
 ## 注意事項
 
@@ -55,6 +56,11 @@ pnpm dev                            # http://localhost:5173
   - 圖示：`bus-{go|back|unknown}-{主題}`（Maki `bus` 圓底，去程／返程不同色：`Palette.busGo`／`busBack`）＋ `bus-arrow-*`（Maki `triangle`，依 `Azimuth` 旋轉、繞在圓外指出行進方向）。
   - 「公車動態」圖層關閉或分頁在背景（`visibilitychange`）時停止輪詢；下載失敗保留上一筆位置並在側欄顯示錯誤。
   - 資料來源標示：attribution 加上「公車動態：臺北市政府交通局（Data.Taipei）」。
+- **路徑規劃**：`src/routing/`＋`components/RoutePanel.tsx`。側欄「路徑規劃 → 開始」後，地圖點擊改為選起點、終點（`MapView` 的 `onPick`，游標為十字），第三次點擊重新選起點；可切換開車／步行、起訖對調、清除，「結束」清掉路線。
+  - 請求 `{VITE_OSRM_URL}/{driving|foot}/route/v1/{profile}/{lon,lat;lon,lat}?overview=full&geometries=geojson`：每個 profile 是一個 osrm-routed，以路徑前綴區分。開發時 `vite.config.ts` 的 proxy 把 `/osrm/driving` → `127.0.0.1:5000`、`/osrm/foot` → `127.0.0.1:5001`（本機 Docker 容器 `osrm-car`／`osrm-foot`，建置方式見 `Question/1-最短路徑.md`）。
+  - **`VITE_OSRM_URL` 未設定時不顯示路徑規劃**；正式站（Cloudflare Pages）目前未設定，待 OSRM 經 named tunnel 對外後再加。
+  - 路線與起訖點跟公車一樣放在 `buildStyle({ route })` 的 GeoJSON source（`route`），不在 style 外 `setData`。路線線條在道路／捷運之上、POI 與文字之下；起訖點在文字之上、公車之下。路線色為各主題 `Palette.route`。
+  - OSRM 的 NoRoute／NoSegment 以 HTTP 400 回 JSON，`fetchRoute()` 會先解析 body 顯示中文原因；換點或換 profile 時以 AbortController 取消未完成的請求。
 - **地圖樣式（主題）**：側欄「地圖樣式」下拉選單（`<select>`）切換 `預設`／`OSM Bright`／`柔和`／`暗色`／`黑白`／`黑白淡色`（柔和、黑白、黑白淡色分別參考 Stadia 的 Alidade Smooth、Stamen Toner、Toner Lite 的用途與配色方向，名稱不沿用其品牌）。Stadia 清單中的 Satellite／Terrain／Watercolor 需要衛星影像、地形陰影或水彩 raster 圖磚，本專案沒有這些資料來源，未提供。主題 id 會存進 localStorage，**不可改名**。各主題**只換色盤（`Palette`），圖層 id、filter、順序完全相同**，所以 `setStyle` diff 只會改 paint 屬性，相機與已載入圖磚不受影響。新增主題＝在 `style.ts` 加一份 `Palette` 並加入 `THEMES`（色值必須是 `#rrggbb`，POI 圓點由此產生）。POI 圖示 id 含主題名（`poi-major-dark`），因為 MapLibre 在 `setStyle` 後會保留已加入的圖片，共用 id 會沿用舊主題顏色。
   - OSM Bright 原始 style JSON（OpenMapTiles，CC-BY 4.0）是給 OpenMapTiles schema（`transportation`、`landcover`、`place`…）用的，與本專案 Martin 自訂的 9 層不相容，**無法直接載入**；此處只取其配色近似值。
 - **除錯**：開發模式下 `window.__map` 是 MapLibre 實例（production build 不會有）。

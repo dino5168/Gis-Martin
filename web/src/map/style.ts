@@ -1,4 +1,5 @@
 import { EMPTY_BUSES, type BusFeatureCollection, type BusFeatureProperties } from '../bus/busData';
+import { EMPTY_ROUTE, type RouteFeatureCollection } from '../routing/osrm';
 import type {
   ExpressionSpecification,
   LayerSpecification,
@@ -98,6 +99,7 @@ const DEFAULT_PALETTE = {
   label: '#3a3a3a',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
+  route: '#1a73e8',
 } as const;
 
 /** Colour roles shared by every theme; themes only swap colours, never layers. */
@@ -153,6 +155,7 @@ const BRIGHT_PALETTE: Palette = {
   label: '#333333',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
+  route: '#1a73e8',
 };
 
 const DARK_PALETTE: Palette = {
@@ -200,6 +203,7 @@ const DARK_PALETTE: Palette = {
   label: '#e6e6e6',
   labelHalo: '#1d1f22',
   transitCasing: '#1d1f22',
+  route: '#4da3ff',
 };
 
 // 淡灰低彩度底圖，適合疊加業務資料（類似 Stadia Alidade Smooth 的用途）
@@ -248,6 +252,7 @@ const SMOOTH_PALETTE: Palette = {
   label: '#5a5a5a',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
+  route: '#2f6fd6',
 };
 
 // 高對比黑白（類似 Stamen Toner）：白色陸地、黑色水域與道路；土地使用不分色
@@ -296,6 +301,7 @@ const TONER_PALETTE: Palette = {
   label: '#000000',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
+  route: '#000000',
 };
 
 // 淡色黑白（類似 Stamen Toner Lite）：灰階、低對比
@@ -344,6 +350,7 @@ const TONER_LITE_PALETTE: Palette = {
   label: '#555555',
   labelHalo: '#ffffff',
   transitCasing: '#ffffff',
+  route: '#333333',
 };
 
 /** Selectable map themes, in display order (ids are persisted in localStorage; do not rename). */
@@ -714,6 +721,10 @@ export interface MakiIconSpec {
 
 /** GeoJSON source holding live bus positions (updated through the style; see buildStyle). */
 export const BUS_SOURCE_ID = 'buses';
+/** GeoJSON source holding the planned route and its endpoints (see routing/osrm.ts). */
+export const ROUTE_SOURCE_ID = 'route';
+/** Route layers are driven by the planner, not by a toggle group. */
+export const ROUTE_LAYER_IDS = ['route-casing', 'route-line', 'route-endpoints', 'route-endpoint-labels'] as const;
 /** Bus discs are larger than POIs: moving vehicles are the focus when the layer is on. */
 const BUS_ICON_DIAMETER = 22;
 type BusDir = BusFeatureProperties['dir'];
@@ -1077,6 +1088,32 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
     },
   },
 
+  // ---- 路徑規劃（OSRM，GeoJSON）：壓在道路與捷運之上、POI 與文字之下，不遮路名 ----
+  {
+    group: null,
+    layer: {
+      id: 'route-casing', type: 'line', source: ROUTE_SOURCE_ID,
+      filter: ['==', ['get', 'role'], 'line'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': p.labelHalo,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 5, 12, 8, 16, 12, 19, 18],
+      },
+    },
+  },
+  {
+    group: null,
+    layer: {
+      id: 'route-line', type: 'line', source: ROUTE_SOURCE_ID,
+      filter: ['==', ['get', 'role'], 'line'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': p.route,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 3, 12, 5, 16, 8, 19, 12],
+      },
+    },
+  },
+
   // ---- buildings 3D（LOD1）----
   // 放在道路之後：柱體會遮住後方道路，比 2D 圖層更上層才合理。
   // 預設隱藏，由 3D 模式開關控制（見 MapView 的 threeD）。
@@ -1173,6 +1210,36 @@ function buildLayers(theme: ThemeId): GroupedLayer[] {
     },
   },
 
+  // ---- 路徑規劃起訖點：在文字標註之上，避免被路名蓋住 ----
+  {
+    group: null,
+    layer: {
+      id: 'route-endpoints', type: 'circle', source: ROUTE_SOURCE_ID,
+      filter: ['!=', ['get', 'role'], 'line'],
+      paint: {
+        'circle-radius': 11,
+        'circle-color': ['match', ['get', 'role'], 'start', p.labelHalo, p.route],
+        'circle-stroke-color': ['match', ['get', 'role'], 'start', p.route, p.labelHalo],
+        'circle-stroke-width': 3,
+      },
+    },
+  },
+  {
+    group: null,
+    layer: {
+      id: 'route-endpoint-labels', type: 'symbol', source: ROUTE_SOURCE_ID,
+      filter: ['!=', ['get', 'role'], 'line'],
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-font': FONT,
+        'text-size': 12,
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
+      },
+      paint: { 'text-color': ['match', ['get', 'role'], 'start', p.route, p.labelHalo] },
+    },
+  },
+
   // ---- 公車動態（Data.Taipei 即時位置，GeoJSON；畫在最上層）----
   {
     group: 'buses',
@@ -1241,6 +1308,8 @@ export interface StyleOptions {
   threeD?: boolean;
   /** Live bus positions; part of the style so setStyle diff updates them (setGeoJSONSourceData). */
   buses?: BusFeatureCollection;
+  /** Planned route and endpoints; in the style for the same reason as `buses`. */
+  route?: RouteFeatureCollection;
 }
 
 /**
@@ -1252,13 +1321,20 @@ export interface StyleOptions {
  *
  * Args:
  *   martinUrl: Validated Martin base URL without trailing slash.
- *   options: Theme, hidden layer groups and 3D mode; defaults to the default theme, all groups on, 2D.
+ *   options: Theme, hidden layer groups, 3D mode and GeoJSON overlays; defaults to the default theme,
+ *     all groups on, 2D, no buses and no route.
  *
  * Returns:
  *   A MapLibre style specification (v8).
  */
 export function buildStyle(martinUrl: string, options: StyleOptions = {}): StyleSpecification {
-  const { theme = DEFAULT_THEME, hiddenGroups = new Set<LayerGroupId>(), threeD = false, buses = EMPTY_BUSES } = options;
+  const {
+    theme = DEFAULT_THEME,
+    hiddenGroups = new Set<LayerGroupId>(),
+    threeD = false,
+    buses = EMPTY_BUSES,
+    route = EMPTY_ROUTE,
+  } = options;
   const visibility = layerVisibility(hiddenGroups, threeD);
   return {
     version: 8,
@@ -1268,6 +1344,7 @@ export function buildStyle(martinUrl: string, options: StyleOptions = {}): Style
       [SOURCE_ID]: { type: 'vector', url: compositeTileJsonUrl(martinUrl) },
       // 公車資料若放在 style 外以 setData 更新，下一次 setStyle diff 會把它比對回空資料；放進 style 才一致
       [BUS_SOURCE_ID]: { type: 'geojson', data: buses },
+      [ROUTE_SOURCE_ID]: { type: 'geojson', data: route },
     },
     layers: buildLayers(theme).map(({ layer }) => {
       const v = visibility[layer.id];
@@ -1297,7 +1374,7 @@ export function layerIdsOf(group: LayerGroupId): string[] {
  *   threeD: Whether 3D (LOD1) building mode is on.
  *
  * Returns:
- *   Map of layer id to `'visible' | 'none'`; base layers (sea/land) are not included.
+ *   Map of layer id to `'visible' | 'none'`; ungrouped layers (sea/land, route) are not included.
  */
 export function layerVisibility(
   hiddenGroups: ReadonlySet<LayerGroupId>,

@@ -8,6 +8,12 @@ export default defineConfig({
     host: 'localhost',
     port: 5173,
     strictPort: true,
+    // 本機自架 OSRM：每個 profile 一個 osrm-routed 容器（見 Question/1-最短路徑.md），
+    // 以同源路徑 /osrm/{profile} 轉發，不必處理 CORS；正式環境由反向代理／tunnel 提供相同路徑
+    proxy: {
+      '/osrm/driving': { target: 'http://127.0.0.1:5000', rewrite: (path) => path.replace(/^\/osrm\/driving/, '') },
+      '/osrm/foot': { target: 'http://127.0.0.1:5001', rewrite: (path) => path.replace(/^\/osrm\/foot/, '') },
+    },
   },
   build: {
     // maplibre-gl 本身壓縮後約 1 MB（gzip ~350 KB），屬預期大小

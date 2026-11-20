@@ -57,6 +57,7 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 | 21 | 興趣點類別整理（`Tasks/3`） | 8 大類、693 子類別統計表（筆數、有名稱、出圖 zoom）；**公車站牌（`public_transport=platform`+`highway=bus_stop`）改為 z16 出圖**（49,039 筆，z14 合併圖磚 450 → 456 KB） | `Tasks/3-興趣點資料整理.md` |
 | 22 | POI 改用 Maki 圖示（`Tasks/4`） | `@mapbox/maki` 8.2.0（CC0，可商用）；204 個 `class/subclass` → 104 個圖示、9 分組配色＋大類預設圖示；**修正 MapLibre 6 `styleimagemissing` 無法補當次請求圖片的問題 → 改用 `setMissingStyleImageResolver()`**（原本首批圖磚會缺圖示與道路名稱） | web/README.md |
 | 23 | 台北市公車動態（`Tasks/Router/1-串接API.md`） | 前端直接輪詢 Data.Taipei `GetBusData.gz`（CORS `*`、免金鑰、30 秒、`DecompressionStream` 解壓、WGS84）；去／返程配色＋依方位角旋轉的方向箭頭；路線下拉選單 416 條（`GetRoute.gz`，**`RouteID`＝`pathAttributeId`**），選路線自動縮放；圖層關閉或背景分頁停止輪詢 | web/README.md |
+| 24 | 路徑規劃（`Question/1-最短路徑.md`） | 評估 pgRouting（現有 `roads` 未在路口切段、無 node id／通行 tags）後改採**自架 OSRM 6.0（Docker，MLD）**：car／foot 建置共約 4 分鐘、執行時約 1.7 GB；開車結果與 OSRM 官方 demo 一致，查詢 4–12 ms。前端側欄「路徑規劃」：地圖點選起訖、開車／步行、對調、清除，路線疊在 GeoJSON source；`VITE_OSRM_URL` 選用（dev 經 Vite proxy）；vitest 156 項通過、瀏覽器驗證。**正式站尚未開放**（需 named tunnel） | web/README.md、`Question/1-最短路徑.md` |
 
 ### 2026-11-17 工作紀錄（下午）
 
@@ -136,6 +137,13 @@ Set-Location "D:\1-研發\3-Gis-Martin\web"; pnpm dev  # Vite 開發伺服器不
 - [ ] 前端元件（MapView、App）目前無自動化測試，僅以瀏覽器手動驗證
 - [ ] `tourism/information` 1.6 萬筆（其中 1.1 萬無名稱，多為步道導覽牌）在 z14 全數出圖，山區（陽明山）很擠 → 建議無名稱者延後到 z16（改 `01` 一行）
 - [ ] Maki 圖示 18 px 比原圓點大，碰撞偵測會藏掉較多 POI；若太稀疏，可把 z16 才出現的圖示縮為 15 px
+
+### 5. 路徑規劃（OSRM）
+
+- [ ] 正式機執行方式：Docker Desktop（需登入）／WSL2 + docker-ce／Linux 主機
+- [ ] 對外：named tunnel 依路徑分流 `/osrm/driving`、`/osrm/foot`，Pages 設 `VITE_OSRM_URL`；Cloudflare rate limit
+- [ ] 資料更新流程納入 OSRM 重建（extract → partition → customize，重啟容器）
+- [ ] 機車 profile（預設 car.lua 會走國道）
 
 ### 4. 公車動態（`Tasks/Router/`）
 

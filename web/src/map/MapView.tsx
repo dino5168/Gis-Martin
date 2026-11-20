@@ -17,7 +17,7 @@ export interface MapFocus {
   bounds: [[number, number], [number, number]];
 }
 
-// 縮放到公車路線時不要太近：單一車輛時 bounds 是一個點
+// 縮放到公車路線／規劃路線時不要太近：單一車輛或極短路線時 bounds 幾乎是一個點
 const FOCUS_MAX_ZOOM = 15;
 const FOCUS_PADDING = 80;
 
@@ -36,6 +36,8 @@ interface MapViewProps {
   /** Area to zoom to (EPSG:4326 `[[w,s],[e,n]]`); a new object triggers one camera move. */
   focus?: MapFocus | null;
   onSelect: (feature: SelectedFeature | null) => void;
+  /** When set, map clicks pick a point (EPSG:4326 `[lon, lat]`) instead of selecting features. */
+  onPick?: ((lngLat: [number, number]) => void) | null;
   onViewChange: (view: ViewState) => void;
   onError: (message: string) => void;
 }
@@ -88,7 +90,7 @@ async function createPoiImage(id: string): Promise<{ data: RgbaImage; ratio: num
  * Returns:
  *   The map container element.
  */
-export function MapView({ style, threeD, focus = null, onSelect, onViewChange, onError }: MapViewProps) {
+export function MapView({ style, threeD, focus = null, onSelect, onPick = null, onViewChange, onError }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -98,8 +100,8 @@ export function MapView({ style, threeD, focus = null, onSelect, onViewChange, o
   const appliedStyleRef = useRef<StyleSpecification | null>(null);
 
   // 回呼放 ref：父元件每次 render 產生新函式時不必重建地圖
-  const callbacks = useRef({ onSelect, onViewChange, onError });
-  callbacks.current = { onSelect, onViewChange, onError };
+  const callbacks = useRef({ onSelect, onPick, onViewChange, onError });
+  callbacks.current = { onSelect, onPick, onViewChange, onError };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -132,6 +134,11 @@ export function MapView({ style, threeD, focus = null, onSelect, onViewChange, o
     };
 
     const handleClick = (e: MapMouseEvent): void => {
+      const pick = callbacks.current.onPick;
+      if (pick) {
+        pick([e.lngLat.lng, e.lngLat.lat]);
+        return;
+      }
       const [hit] = map.queryRenderedFeatures(e.point, { layers: [...INTERACTIVE_LAYER_IDS] });
       callbacks.current.onSelect(
         hit ? { sourceLayer: hit.sourceLayer ?? hit.source, properties: { ...hit.properties } } : null,
@@ -139,6 +146,10 @@ export function MapView({ style, threeD, focus = null, onSelect, onViewChange, o
     };
 
     const handleHover = (e: MapMouseEvent): void => {
+      if (callbacks.current.onPick) {
+        map.getCanvas().style.cursor = 'crosshair';
+        return;
+      }
       const hits = map.queryRenderedFeatures(e.point, { layers: [...INTERACTIVE_LAYER_IDS] });
       map.getCanvas().style.cursor = hits.length > 0 ? 'pointer' : '';
     };

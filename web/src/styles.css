@@ -136,6 +136,84 @@ body {
   font-weight: 400;
 }
 
+.route-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.route-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.route-header h2 {
+  margin: 0;
+}
+
+.link-button {
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.link-button[aria-pressed='true'] {
+  color: #fff;
+  background: var(--accent);
+}
+
+.route-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+}
+
+.route-summary strong {
+  font-size: 1.15rem;
+}
+
+.route-summary span {
+  color: var(--text-muted);
+}
+
+.route-panel .hint {
+  margin: 0;
+}
+
+.route-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.route-actions button {
+  padding: 6px 0;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.route-actions button:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.link-button:focus-visible,
+.route-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .style-select {
   display: grid;
   gap: 6px;
