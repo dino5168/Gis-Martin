@@ -1,0 +1,18 @@
+# OSRM 對外代理（Docker 容器 osrm-proxy，127.0.0.1:5080）
+# 前端請求 {VITE_OSRM_URL}/{driving|foot}/route/v1/...：依前綴分到各 profile 的 osrm-routed，
+# 轉發時拿掉前綴（osrm-routed 只認 /route/v1/...）。quick tunnel 一次只能轉一個 origin，所以兩個 profile 合在這裡。
+# 副本：C:\gis\osm\osrm\Caddyfile（容器掛載的是副本）
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	handle_path /driving/* {
+		reverse_proxy osrm-car:5000
+	}
+	handle_path /foot/* {
+		reverse_proxy osrm-foot:5000
+	}
+	respond 404
+}

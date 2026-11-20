@@ -18,6 +18,13 @@
   - 停止後正式站底圖會空白（公車動態不受影響，因為直接連 Data.Taipei）
 - 起始畫面：三峽 121.37621, 24.93873, z16（`MapView.tsx` 的 `INITIAL_CENTER`）
 
+### 2026-11-20 quick tunnel 現況
+
+- Martin：`GisMartin-QuickTunnel` 於 08:39 重啟 → `https://nelson-coaching-announces-connect.trycloudflare.com`（Pages `VITE_MARTIN_URL`），約 2026-11-23 08:39 自動停止
+- OSRM：Docker 容器 `osrm-proxy`（Caddy 2.8.4，`127.0.0.1:5080`，設定 `osrm/Caddyfile` → 副本 `C:\gis\osm\osrm\Caddyfile`；`/driving/*` → `osrm-car`、`/foot/*` → `osrm-foot`，三個容器在 docker network `osrm`）＋排程工作 **`GisMartin-OsrmTunnel`**（同 Martin 那條的設定，72 小時、日誌 `C:\gis\osm\logs\osrmtunnel.log`）→ `https://authorities-programs-logging-sailing.trycloudflare.com`（Pages `VITE_OSRM_URL`），約 2026-11-23 10:4x 自動停止
+  - 重啟：`Start-ScheduledTask GisMartin-OsrmTunnel` → `Select-String C:\gis\osm\logs\osrmtunnel.log 'trycloudflare.com' | Select -Last 1` → 改 Pages `VITE_OSRM_URL` → 重新部署
+  - Docker Desktop 必須在執行（容器 `--restart unless-stopped`，隨 Docker Desktop 啟動）
+
 ## 下次進來先做
 
 ```powershell
