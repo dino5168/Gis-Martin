@@ -24,3 +24,6 @@ Desktop.ini
 .DS_Store
 .vscode/
 .idea/
+
+# 外部原始資料（Shapefile 等），不納入版控
+Data/
